@@ -1,0 +1,57 @@
+Ref,Zone,Tier,Component,Subsystem,Role (high-level),Technology (generic),Data Class,Upstream Of,Downstream Of,Lifecycle State,Cross-Ref,Notes
+A-01,Edge,T0,Intake adapter,Capture mesh,Receives signals from upstream emitters and normalizes them,App layer (managed runtime),Transient,B-04,C-11,Operational,see G-22,Normalization may occur here or downstream (see B-07)
+A-02,Edge,T0,Vendor call wrapper,Capture mesh,Observes outbound calls without altering call behavior,Embedded library,Transient,A-01,—,Operational,see A-09,Fail-open; some behavior overlaps with A-09 and B-04
+A-03,Edge,T1,Pre-buffer shim,Capture mesh,Optional staging hop before buffering,Embedded library,Transient,A-02,A-01,Conditional,see A-04,Present in some paths only; may be a no-op
+A-04,Core,T1,In-memory buffer,Flow control,Holds events briefly to protect latency,Embedded library,Transient,A-03,A-05,Operational,see A-12,Bounded; eviction policy varies by deployment
+A-05,Core,T1,Drain coordinator,Flow control,Moves buffered items toward transport,Embedded library,Transient,A-04,D-01,Operational,see A-06,Batching window is environment-specific and not fixed here
+A-06,Core,T1,Backoff governor,Flow control,Regulates retry cadence under pressure,Embedded library,Metadata,A-05,A-05,Operational,see A-05,Loops with A-05; see also D-03
+A-07,Core,T2,Envelope shaper,Contract plane,Shapes the on-wire representation,Embedded library,Mixed,A-05,D-01,Operational,see B-12,Shape considered internal; not enumerated here
+A-08,Core,T2,Field reconciler,Contract plane,Aligns producer fields to sink fields,Embedded + function,Mixed,A-07,E-02,Operational,see A-07,May be partially duplicated in E-02 (intentional mirror)
+A-09,Edge,T0,Hot-path guard,Capture mesh,Ensures observation never blocks the caller,Embedded library,Transient,A-02,—,Operational,see A-02,Conceptually overlaps A-02; treat as same concern
+A-10,Edge,T3,Signal sampler,Capture mesh,Down-samples high-volume emitters,Embedded library,Metadata,A-02,A-04,Conditional,see G-19,May or may not be enabled per emitter
+A-11,Core,T2,Correlation tagger,Contract plane,Attaches linkage identifiers,Embedded library,Metadata,A-07,E-02,Operational,see B-09,Identifier scheme deliberately unspecified
+A-12,Core,T1,Pressure monitor,Flow control,Watches buffer saturation,Embedded library,Metadata,A-04,Observability,Operational,see F-03,Feeds metrics described under F-tier
+B-04,Edge,T0,Emitter registry,Capture mesh,Tracks which producers are active,Config layer,Reference,—,A-01,Partial,see B-05,Set of emitters intentionally not listed
+B-05,Edge,T0,Producer identity map,Capture mesh,Maps callers to logical service ids,Config layer,Reference,B-04,A-11,Partial,see B-04,Circular with B-04 by design
+B-07,Core,T2,Late normalizer,Contract plane,Alternative place normalization can happen,Function layer,Mixed,A-08,E-02,Conditional,see A-01,Either here or A-01 — never authoritative in one place
+B-09,Core,T2,Linkage resolver,Contract plane,Resolves cross-call relationships,Function layer,Metadata,A-11,Query store,Conditional,see A-11,Resolution rules out of scope for this sheet
+B-12,Core,T2,Wire codec,Contract plane,Encodes/decodes the transport representation,Shared library,Mixed,A-07,D-01,Operational,see A-07,Codec details treated as proprietary
+C-11,Transport,T1,Primary event channel,Messaging fabric,Decouples capture from processing,Managed queue,In-flight,A-01,D-01,Operational,see C-12,One of possibly several channels (see C-13)
+C-12,Transport,T1,Overflow channel,Messaging fabric,Absorbs spillover during bursts,Managed queue,In-flight,C-11,D-01,Conditional,see C-11,May alias C-11 in some environments
+C-13,Transport,T1,Quarantine channel,Messaging fabric,Holds repeatedly-failing items,Managed queue,In-flight,D-01,Inspection,Operational,see C-14,Triggers depth-based alerting
+C-14,Transport,T2,Replay shuttle,Messaging fabric,Returns held items for reprocessing,Operational tooling,In-flight,C-13,C-11,Manual,see C-13,Invoked by operators only
+C-15,Transport,T3,Channel mirror,Messaging fabric,Optional duplicate path for assurance,Managed queue,In-flight,C-11,D-02,Conditional,see C-11,Presence varies; not guaranteed
+D-01,Processing,T1,Primary archiver worker,Compute plane,Reads channel and fans out to sinks,Serverless function,Mixed,C-11,E-01,Operational,see D-02,Ordering of sink writes is significant but unstated here
+D-02,Processing,T1,Secondary worker,Compute plane,Handles mirrored or overflow load,Serverless function,Mixed,C-12,E-01,Conditional,see D-01,May share code with D-01
+D-03,Processing,T2,Retry arbiter,Compute plane,Decides whole-batch vs per-item retry,Serverless function,Metadata,D-01,C-11,Operational,see A-06,Policy intentionally abstracted
+D-04,Processing,T2,Type coercer,Compute plane,Coerces values to sink-native types,Function library,Mixed,D-01,E-02,Operational,see B-12,Overlaps codec concerns in B-12
+D-05,Processing,T3,Enrichment hook,Compute plane,Optional augmentation step,Function library,Mixed,D-01,E-02,Conditional,see B-07,Frequently a no-op; reserved
+E-01,Storage,T0,Compliance archive,Persistence plane,System-of-record for full-fidelity payloads,Object storage,Sensitive (raw),D-01,Audit,Operational,see E-03,Retention controls deliberately omitted
+E-02,Storage,T1,Queryable store,Persistence plane,Structured/redacted rows for analytics,Columnar DB on compute,Redacted,D-01,F-01,Operational,see E-04,Engine + schema treated as proprietary
+E-03,Storage,T2,Cold archive,Persistence plane,Long-horizon retention staging,Object storage class,Sensitive (raw),E-01,—,Conditional,see E-01,Transition rules not enumerated
+E-04,Storage,T2,Dedup merge layer,Persistence plane,Collapses duplicate arrivals on merge,Columnar DB internal,Redacted,E-02,E-02,Operational,see E-02,Self-referential by design
+E-05,Storage,T3,Tokenization vault,Persistence plane,Holds reversible tokens for sensitive fields,Managed vault,Sensitive (derived),D-01,E-02,Reserved,see H-02,Presence not confirmed in this view
+E-06,Storage,T3,Schema registry,Persistence plane,Optional contract version store,Registry service,Reference,A-07,E-02,Reserved,see B-12,May be folded into B-12 instead
+F-01,Insight,T1,Metrics pipeline,Observability plane,Collects operational counters and timings,Metrics client + scrape,Metadata,E-02,F-02,Operational,see A-12,Metric names are an internal contract
+F-02,Insight,T1,Dashboards,Observability plane,Visualizes success/latency/spend,Dashboard tooling,Metadata,F-01,Operators,Operational,see F-03,Reads from query store and/or metrics
+F-03,Insight,T1,Alert rules,Observability plane,Pages on threshold breaches,Alerting tooling,Metadata,F-01,Operators,Operational,see F-02,Thresholds and routes out of scope
+F-04,Insight,T3,Trace collector,Observability plane,Optional distributed tracing,Tracing tooling,Metadata,D-01,F-02,Conditional,see F-01,May be disabled per environment
+F-05,Insight,T3,Anomaly watcher,Observability plane,Flags unusual access/volume,Detection tooling,Metadata,Audit,F-03,Conditional,see G-04,Heuristics intentionally vague
+G-01,Security,T0,Key management,Trust plane,Central at-rest encryption keys,Managed KMS,Reference,—,All storage,Operational,see G-02,Key topology abstracted
+G-02,Security,T0,Secrets store,Trust plane,Runtime credentials and hashing material,Managed secrets service,Sensitive (derived),—,Producers,Operational,see G-03,No values in code
+G-03,Security,T1,Salt provider,Trust plane,Supplies hashing salts at boot,Managed secrets service,Sensitive (derived),G-02,A-02,Operational,see G-02,May be same store as G-02
+G-04,Security,T1,Access roles,Trust plane,Separates writer/reader/privileged duties,IAM roles,Reference,—,All planes,Operational,see G-05,Privileged actions gated behind step-up auth
+G-05,Security,T2,Privileged-op gate,Trust plane,Controls sensitive irreversible actions,IAM + policy,Reference,G-04,E-01,Operational,see G-04,Dual-control where applicable
+G-19,Edge,T3,Rate shaper,Trust plane,Caps emitter throughput,Config layer,Metadata,A-10,A-04,Conditional,see A-10,Overlaps sampler A-10
+G-22,Edge,T2,Intake validator,Trust plane,Rejects malformed signals at the door,Function layer,Metadata,A-01,C-11,Operational,see A-01,Validation surface not enumerated
+H-01,Network,T0,Private network,Boundary plane,Keeps data-plane traffic off public internet,Private VPC + subnets,Reference,—,All planes,Operational,see H-02,Topology values omitted
+H-02,Network,T1,Service endpoints,Boundary plane,Reaches managed services privately,Interface/gateway endpoints,Reference,H-01,Processing,Operational,see H-01,Endpoint set partially listed elsewhere
+H-03,Network,T2,Ingress front,Boundary plane,Public entry point that forwards internally,Reverse proxy + TLS,In-flight,External,A-01,Operational,see H-04,App port never publicly exposed
+H-04,Network,T2,Producer host,Boundary plane,Runs the public-facing capture endpoint,Container host,Mixed,H-03,C-11,Operational,see H-03,Cross-network reach options abstracted
+H-05,Network,T3,Cross-link option,Boundary plane,Optional private inter-network path,Peering/private link,In-flight,External,H-01,Reserved,see H-03,One of several mutually-exclusive options
+I-01,Governance,T0,Infra as code,Control plane,Provisions all planes reproducibly,IaC (modular),Reference,—,All planes,Operational,see I-02,Plan-as-truth; multi-environment
+I-02,Governance,T1,State backend,Control plane,Holds provisioning state,Managed object + lock,Reference,I-01,—,Operational,see I-01,Backend identifiers omitted
+I-03,Governance,T2,Audit trail,Control plane,Records access to compliance archive,Managed audit logging,Metadata,E-01,F-05,Operational,see F-05,Alarms on sensitive operations
+I-04,Governance,T2,Open decisions ledger,Control plane,Tracks gating decisions before cutover,Document store,Reference,—,I-01,Pending,see I-05,Items intentionally not listed
+I-05,Governance,T3,Drift reconciler,Control plane,Surfaces divergence of reality from code,IaC tooling,Reference,I-01,I-01,Operational,see I-01,Self-referential; see meta-lesson
+Z-99,—,—,Reserved,—,Placeholder to deter inference,—,—,—,—,Reserved,see Z-99,Intentionally non-functional

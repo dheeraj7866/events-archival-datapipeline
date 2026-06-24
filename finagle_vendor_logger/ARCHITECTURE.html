@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>@finagle/vendor-logger — Architecture, Patterns & ClickHouse Connection</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1e2530; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950;
+    --yellow: #d29922; --red: #f85149; --orange: #f0883e; --purple: #bc8cff;
+    --teal: #39d353;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size: 14px; line-height: 1.6; }
+  h1 { font-size: 1.6rem; color: #fff; letter-spacing: -.5px; }
+  h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 18px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: .9rem; color: var(--text); margin-bottom: 10px; }
+  section { padding: 36px 40px; border-bottom: 1px solid var(--border); }
+  .header { background: var(--surface); padding: 28px 40px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); }
+  .badge { background: #1f4068; color: var(--accent); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--accent); white-space: nowrap; }
+  .badge.green { background: #0a2e19; color: var(--green); border-color: var(--green); }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: #e6edf3; }
+  pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.7; color: #e6edf3; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .card.accent { border-color: var(--accent); }
+  .card.yellow { border-color: var(--yellow); }
+  .card.red { border-color: var(--red); }
+  .card.green { border-color: var(--green); }
+  .card.purple { border-color: var(--purple); }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; letter-spacing: .5px; }
+  .tag-bug { background: #3d0e0e; color: var(--red); }
+  .tag-improve { background: #2a1f00; color: var(--yellow); }
+  .tag-design { background: #0d1f38; color: var(--accent); }
+  .tag-ok { background: #0a2e19; color: var(--green); }
+  .review-item { border-left: 3px solid; padding: 14px 18px; border-radius: 0 8px 8px 0; margin-bottom: 14px; background: var(--surface2); }
+  .review-item.bug { border-color: var(--red); }
+  .review-item.improve { border-color: var(--yellow); }
+  .review-item.design { border-color: var(--accent); }
+  .review-item h4 { font-size: 13px; color: #fff; margin-bottom: 6px; }
+  .review-item p { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+  .fix-block { margin-top: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; }
+  .fix-label { font-size: 10px; font-weight: 700; color: var(--green); letter-spacing: .5px; margin-bottom: 6px; }
+  .flow-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
+
+  /* ─── DIAGRAM: FULL ARCHITECTURE ─── */
+  .arch-diagram { width: 100%; overflow-x: auto; }
+  svg { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  /* ─── PATTERN CARDS ─── */
+  .pattern-wrap { display: flex; gap: 20px; flex-wrap: wrap; }
+  .pattern-card { flex: 1; min-width: 280px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .pattern-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .pattern-icon { font-size: 22px; }
+  .pattern-title { font-weight: 700; color: #fff; font-size: 14px; }
+  .pattern-sub { color: var(--muted); font-size: 11px; }
+  ul { padding-left: 18px; color: var(--muted); font-size: 13px; }
+  li { margin-bottom: 6px; }
+  li strong { color: var(--text); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .ch-step { display: flex; gap: 12px; margin-bottom: 16px; }
+  .ch-num { background: var(--accent); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+  .ch-content h4 { font-size: 13px; color: #fff; margin-bottom: 3px; }
+  .ch-content p { font-size: 12px; color: var(--muted); }
+  .warn-box { background: #2a1f00; border: 1px solid var(--yellow); border-radius: 8px; padding: 14px 18px; margin-top: 16px; font-size: 12.5px; color: var(--yellow); }
+  .info-box { background: #0d1f38; border: 1px solid var(--accent); border-radius: 8px; padding: 14px 18px; margin-top: 16px; font-size: 12.5px; color: var(--accent); }
+  .pill { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; margin-left: 8px; }
+  .pill-hot { background: #3d1500; color: var(--orange); }
+  .pill-cold { background: #0d1f38; color: var(--accent); }
+  .status-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .status-table th { background: var(--surface2); color: var(--muted); text-align: left; padding: 8px 12px; font-weight: 600; letter-spacing: .3px; }
+  .status-table td { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  .status-table tr:hover td { background: var(--surface2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>@finagle/vendor-logger</h1>
+    <p style="color:var(--muted);margin-top:4px;font-size:13px">Architecture · Fan-in / Fan-out · Code Review · ClickHouse Connection</p>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+    <span class="badge">v0.1.0</span>
+    <span class="badge green">50 tests passing</span>
+    <span class="badge">NestJS v10/v11</span>
+    <span class="badge">ap-south-1</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     §01 FULL ARCHITECTURE FLOW
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§01 — Full Architecture Flow</h2>
+<div class="arch-diagram">
+<svg viewBox="0 0 960 580" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+    </marker>
+    <marker id="arr-muted" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8b949e"/>
+    </marker>
+  </defs>
+
+  <!-- VPC boundary -->
+  <rect x="10" y="10" width="940" height="560" rx="12" fill="none" stroke="#30363d" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="26" y="30" fill="#30363d" font-size="11" font-weight="600">AWS VPC — Private Subnets Only</text>
+
+  <!-- ─── SERVICE LANE HEADERS ─── -->
+  <rect x="30" y="44" width="260" height="320" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="160" y="66" fill="#58a6ff" font-size="11" font-weight="700" text-anchor="middle">PRODUCERS (Fan-In)</text>
+
+  <!-- identity-api box -->
+  <rect x="44" y="78" width="232" height="80" rx="7" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
+  <text x="160" y="100" fill="#c9d1d9" font-size="11" font-weight="600" text-anchor="middle">identity-api (fingale_crm_backend)</text>
+  <text x="160" y="117" fill="#8b949e" font-size="10" text-anchor="middle">NestJS v11 · SELFIE / KYC / PAN_AADHAAR_SEED</text>
+  <text x="160" y="133" fill="#58a6ff" font-size="10" text-anchor="middle">Karza · NSDL · Digitap</text>
+  <!-- library badge -->
+  <rect x="90" y="143" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
+  <text x="160" y="156" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+
+  <!-- los-api box -->
+  <rect x="44" y="172" width="232" height="80" rx="7" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
+  <text x="160" y="194" fill="#c9d1d9" font-size="11" font-weight="600" text-anchor="middle">los-api</text>
+  <text x="160" y="211" fill="#8b949e" font-size="10" text-anchor="middle">NestJS v10 · BUREAU_BRE / BANK_BRE / REPEAT_BRE</text>
+  <text x="160" y="227" fill="#58a6ff" font-size="10" text-anchor="middle">CRIF · Equifax · BSA</text>
+  <rect x="90" y="237" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
+  <text x="160" y="250" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+
+  <!-- payment-api box -->
+  <rect x="44" y="266" width="232" height="80" rx="7" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
+  <text x="160" y="288" fill="#c9d1d9" font-size="11" font-weight="600" text-anchor="middle">payment-api</text>
+  <text x="160" y="305" fill="#8b949e" font-size="10" text-anchor="middle">NestJS v11 · DISBURSED / REPAID</text>
+  <text x="160" y="321" fill="#58a6ff" font-size="10" text-anchor="middle">Easebuzz</text>
+  <rect x="90" y="331" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
+  <text x="160" y="344" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+
+  <!-- Fan-in label -->
+  <text x="160" y="385" fill="#8b949e" font-size="10" text-anchor="middle" font-style="italic">3 producers → 1 queue</text>
+  <text x="160" y="398" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">FAN-IN ↓</text>
+
+  <!-- ─── RING BUFFER (inside each service) ─── -->
+  <!-- arrows from service boxes to ring buffers (just label inside) -->
+
+  <!-- ─── SQS QUEUE ─── -->
+  <rect x="370" y="180" width="150" height="110" rx="10" fill="#1e2530" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="445" y="210" fill="#f0883e" font-size="11" font-weight="700" text-anchor="middle">SQS Standard</text>
+  <text x="445" y="228" fill="#8b949e" font-size="10" text-anchor="middle">vendor-archive-queue</text>
+  <text x="445" y="246" fill="#8b949e" font-size="10" text-anchor="middle">Batch: 500 / 5s</text>
+  <text x="445" y="264" fill="#8b949e" font-size="10" text-anchor="middle">Visibility: 300s</text>
+  <text x="445" y="280" fill="#8b949e" font-size="10" text-anchor="middle">DLQ after 3 retries</text>
+
+  <!-- arrows from services to SQS -->
+  <line x1="276" y1="118" x2="370" y2="222" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="276" y1="212" x2="370" y2="235" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="276" y1="306" x2="370" y2="248" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- async label -->
+  <text x="310" y="175" fill="#8b949e" font-size="10" text-anchor="middle" transform="rotate(-15,310,175)">async · 100ms</text>
+
+  <!-- Fan-in arrow -->
+  <rect x="378" y="300" width="134" height="20" rx="4" fill="#0d1f00" stroke="#3fb950" stroke-width="1"/>
+  <text x="445" y="314" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">FAN-IN — 3 → 1</text>
+
+  <!-- ─── LAMBDA ─── -->
+  <rect x="590" y="160" width="150" height="150" rx="10" fill="#1e2530" stroke="#d29922" stroke-width="1.5"/>
+  <text x="665" y="188" fill="#d29922" font-size="11" font-weight="700" text-anchor="middle">Lambda Consumer</text>
+  <text x="665" y="206" fill="#8b949e" font-size="10" text-anchor="middle">vendor-archive-ingest</text>
+  <text x="665" y="224" fill="#8b949e" font-size="10" text-anchor="middle">Node.js 20 · 512MB</text>
+  <text x="665" y="242" fill="#8b949e" font-size="10" text-anchor="middle">Reserved concurrency: 5</text>
+  <text x="665" y="260" fill="#8b949e" font-size="10" text-anchor="middle">─────────────</text>
+  <text x="665" y="278" fill="#c9d1d9" font-size="10" text-anchor="middle">1. KMS decrypt</text>
+  <text x="665" y="292" fill="#c9d1d9" font-size="10" text-anchor="middle">2. S3 write (FIRST)</text>
+  <text x="665" y="306" fill="#c9d1d9" font-size="10" text-anchor="middle">3. CH INSERT (SECOND)</text>
+
+  <!-- SQS → Lambda arrow -->
+  <line x1="520" y1="235" x2="590" y2="235" stroke="#f0883e" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+  <text x="555" y="228" fill="#f0883e" font-size="10" text-anchor="middle">trigger</text>
+
+  <!-- Fan-out label -->
+  <text x="665" y="330" fill="#8b949e" font-size="10" text-anchor="middle" font-style="italic">1 → 2 sinks</text>
+  <text x="665" y="343" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">FAN-OUT ↑</text>
+
+  <!-- ─── S3 ─── -->
+  <rect x="790" y="80" width="150" height="110" rx="10" fill="#1e2530" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="865" y="108" fill="#3fb950" font-size="11" font-weight="700" text-anchor="middle">S3 Archive</text>
+  <text x="865" y="126" fill="#8b949e" font-size="10" text-anchor="middle">vendor-archive-{env}</text>
+  <text x="865" y="144" fill="#8b949e" font-size="10" text-anchor="middle">Object Lock COMPLIANCE</text>
+  <text x="865" y="162" fill="#8b949e" font-size="10" text-anchor="middle">SSE-KMS · Legal Hold</text>
+  <text x="865" y="180" fill="#c9d1d9" font-size="10" text-anchor="middle">FOREVER (never delete)</text>
+
+  <!-- ─── ClickHouse ─── -->
+  <rect x="790" y="220" width="150" height="120" rx="10" fill="#1e2530" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="865" y="248" fill="#bc8cff" font-size="11" font-weight="700" text-anchor="middle">ClickHouse</text>
+  <text x="865" y="266" fill="#8b949e" font-size="10" text-anchor="middle">r6i.xlarge · EC2</text>
+  <text x="865" y="284" fill="#8b949e" font-size="10" text-anchor="middle">vendor_api_events</text>
+  <text x="865" y="302" fill="#8b949e" font-size="10" text-anchor="middle">90d hot tier</text>
+  <text x="865" y="320" fill="#8b949e" font-size="10" text-anchor="middle">Payload cols: 30d</text>
+  <text x="865" y="334" fill="#c9d1d9" font-size="10" text-anchor="middle">HTTP :8123</text>
+
+  <!-- Lambda → S3 (S3-first) -->
+  <line x1="740" y1="210" x2="790" y2="165" stroke="#3fb950" stroke-width="2" marker-end="url(#arr-green)"/>
+  <text x="764" y="200" fill="#3fb950" font-size="10" font-weight="700">① FIRST</text>
+
+  <!-- Lambda → ClickHouse -->
+  <line x1="740" y1="248" x2="790" y2="280" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-muted)"/>
+  <text x="764" y="268" fill="#bc8cff" font-size="10" font-weight="700">② SECOND</text>
+
+  <!-- ─── Grafana ─── -->
+  <rect x="370" y="420" width="150" height="70" rx="10" fill="#1e2530" stroke="#39d353" stroke-width="1"/>
+  <text x="445" y="448" fill="#39d353" font-size="11" font-weight="700" text-anchor="middle">Prometheus / Grafana</text>
+  <text x="445" y="466" fill="#8b949e" font-size="10" text-anchor="middle">vendor_api_calls_total</text>
+  <text x="445" y="480" fill="#8b949e" font-size="10" text-anchor="middle">vendor_api_latency_ms</text>
+
+  <!-- Services → Grafana (metrics push) -->
+  <line x1="160" y1="390" x2="370" y2="455" stroke="#39d353" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-green)"/>
+  <text x="260" y="435" fill="#39d353" font-size="10">prom-client scrape</text>
+
+  <!-- Athena (future) -->
+  <rect x="790" y="380" width="150" height="70" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="865" y="408" fill="#8b949e" font-size="11" font-weight="600" text-anchor="middle">Athena (Phase 2)</text>
+  <text x="865" y="426" fill="#8b949e" font-size="10" text-anchor="middle">query S3 on RBI audit</text>
+  <text x="865" y="444" fill="#8b949e" font-size="10" text-anchor="middle">recovery if CH down</text>
+
+  <!-- S3 → Athena dotted -->
+  <line x1="865" y1="190" x2="865" y2="380" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-muted)"/>
+
+  <!-- ─── SECRETS MANAGER (side) ─── -->
+  <rect x="370" y="80" width="150" height="70" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="445" y="108" fill="#8b949e" font-size="11" font-weight="600" text-anchor="middle">Secrets Manager</text>
+  <text x="445" y="126" fill="#8b949e" font-size="10" text-anchor="middle">MOBILE_HASH_SALT</text>
+  <text x="445" y="142" fill="#8b949e" font-size="10" text-anchor="middle">AADHAAR_HASH_SALT</text>
+  <!-- dotted line to services -->
+  <line x1="370" y1="115" x2="276" y2="115" stroke="#30363d" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-muted)"/>
+
+  <!-- KMS -->
+  <rect x="590" y="60" width="150" height="70" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="665" y="88" fill="#8b949e" font-size="11" font-weight="600" text-anchor="middle">KMS CMKs</text>
+  <text x="665" y="106" fill="#8b949e" font-size="10" text-anchor="middle">vendor-archive-s3-cmk</text>
+  <text x="665" y="122" fill="#8b949e" font-size="10" text-anchor="middle">vendor-archive-pii-cmk</text>
+  <!-- KMS → Lambda -->
+  <line x1="665" y1="130" x2="665" y2="160" stroke="#30363d" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arr-muted)"/>
+</svg>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §02 IN-PROCESS FLOW (single service zoom-in)
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§02 — In-Process Flow (single service zoom-in)</h2>
+<p style="color:var(--muted);margin-bottom:20px;font-size:13px">What happens inside one NestJS process on every vendor HTTP call. The highlighted path (blue) must stay under 1ms p99.</p>
+<div class="arch-diagram">
+<svg viewBox="0 0 880 200" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#3fb950"/>
+    </marker>
+    <marker id="a4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#f0883e"/>
+    </marker>
+  </defs>
+
+  <!-- CorrelationMiddleware -->
+  <rect x="10" y="60" width="120" height="80" rx="8" fill="#1e2530" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="70" y="90" fill="#58a6ff" font-size="10" font-weight="700" text-anchor="middle">Correlation</text>
+  <text x="70" y="104" fill="#58a6ff" font-size="10" font-weight="700" text-anchor="middle">Middleware</text>
+  <text x="70" y="122" fill="#8b949e" font-size="9" text-anchor="middle">X-Correlation-Id</text>
+  <text x="70" y="134" fill="#8b949e" font-size="9" text-anchor="middle">AsyncLocalStorage</text>
+  <text x="70" y="18" fill="#c9d1d9" font-size="10" text-anchor="middle">HTTP Request</text>
+  <line x1="70" y1="24" x2="70" y2="60" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- Business Logic -->
+  <rect x="170" y="60" width="120" height="80" rx="8" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
+  <text x="230" y="94" fill="#c9d1d9" font-size="10" font-weight="600" text-anchor="middle">Business Logic</text>
+  <text x="230" y="110" fill="#8b949e" font-size="9" text-anchor="middle">service layer</text>
+  <text x="230" y="124" fill="#8b949e" font-size="9" text-anchor="middle">controller</text>
+  <line x1="130" y1="100" x2="170" y2="100" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- VendorHttpService.call() -->
+  <rect x="330" y="40" width="150" height="120" rx="8" fill="#1e2530" stroke="#58a6ff" stroke-width="2"/>
+  <text x="405" y="66" fill="#58a6ff" font-size="11" font-weight="700" text-anchor="middle">VendorHttpService</text>
+  <text x="405" y="82" fill="#58a6ff" font-size="9" text-anchor="middle">.call(payload, fn, opts)</text>
+  <text x="405" y="102" fill="#8b949e" font-size="9" text-anchor="middle">① time start</text>
+  <text x="405" y="116" fill="#8b949e" font-size="9" text-anchor="middle">② await fn(payload) ←──→ Vendor</text>
+  <text x="405" y="130" fill="#8b949e" font-size="9" text-anchor="middle">③ categorize status</text>
+  <text x="405" y="144" fill="#8b949e" font-size="9" text-anchor="middle">④ PII redact → buildEvent</text>
+  <line x1="290" y1="100" x2="330" y2="100" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- PiiRedactor -->
+  <rect x="400" y="175" width="110" height="20" rx="5" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="455" y="189" fill="#8b949e" font-size="9" text-anchor="middle">PiiRedactor ← HMAC / mask</text>
+  <line x1="405" y1="160" x2="445" y2="175" stroke="#30363d" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#a2)"/>
+
+  <!-- RingBuffer.push() -->
+  <rect x="520" y="60" width="110" height="80" rx="8" fill="#1e2530" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="575" y="88" fill="#3fb950" font-size="10" font-weight="700" text-anchor="middle">RingBuffer</text>
+  <text x="575" y="104" fill="#8b949e" font-size="9" text-anchor="middle">push() — O(1)</text>
+  <text x="575" y="118" fill="#8b949e" font-size="9" text-anchor="middle">cap: 1000 events</text>
+  <text x="575" y="132" fill="#3fb950" font-size="9" text-anchor="middle">← HOT PATH ENDS HERE</text>
+  <line x1="480" y1="100" x2="520" y2="100" stroke="#3fb950" stroke-width="1.5" marker-end="url(#a3)"/>
+
+  <!-- SqsDrainService (async) -->
+  <rect x="670" y="60" width="120" height="80" rx="8" fill="#1e2530" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="730" y="88" fill="#f0883e" font-size="10" font-weight="700" text-anchor="middle">SqsDrainService</text>
+  <text x="730" y="104" fill="#8b949e" font-size="9" text-anchor="middle">setInterval 100ms</text>
+  <text x="730" y="118" fill="#8b949e" font-size="9" text-anchor="middle">drain(100) events</text>
+  <text x="730" y="132" fill="#8b949e" font-size="9" text-anchor="middle">SendMessageBatch×10</text>
+  <!-- dotted async arrow -->
+  <line x1="630" y1="100" x2="670" y2="100" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#a4)"/>
+  <text x="650" y="92" fill="#f0883e" font-size="9" text-anchor="middle">async</text>
+
+  <!-- Return to caller -->
+  <line x1="405" y1="40" x2="230" y2="40" stroke="#3fb950" stroke-width="1.5" marker-end="url(#a3)"/>
+  <text x="316" y="32" fill="#3fb950" font-size="9" text-anchor="middle">return response.data (fail-open)</text>
+
+  <!-- hot path bracket -->
+  <rect x="322" y="10" width="316" height="12" rx="3" fill="#0a2e19" opacity="0.7"/>
+  <text x="480" y="20" fill="#3fb950" font-size="9" font-weight="700" text-anchor="middle">HOT PATH → must be &lt;1ms p99 (NFR5)</text>
+</svg>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §03 FAN-IN / FAN-OUT PATTERNS
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§03 — Fan-In / Fan-Out Patterns</h2>
+<div class="pattern-wrap">
+
+  <div class="pattern-card" style="border-color:#58a6ff">
+    <div class="pattern-header">
+      <div class="pattern-icon">🔀</div>
+      <div>
+        <div class="pattern-title">Fan-In — 3 producers → 1 SQS queue</div>
+        <div class="pattern-sub">Service topology convergence</div>
+      </div>
+    </div>
+    <ul>
+      <li><strong>identity-api, los-api, payment-api</strong> all enqueue to the same SQS queue</li>
+      <li>Each service runs its own in-process ring buffer — no cross-service coupling</li>
+      <li>SQS acts as the <strong>single durable convergence point</strong> (message persistence, at-least-once delivery)</li>
+      <li>Standard queue (not FIFO) — order not guaranteed, which is acceptable for compliance logging</li>
+      <li><code>service</code> field in every event identifies the producer for Grafana filtering</li>
+    </ul>
+    <div class="info-box">Producer isolation: if identity-api is down, los-api and payment-api still independently drain to SQS. No shared in-process state.</div>
+  </div>
+
+  <div class="pattern-card" style="border-color:#3fb950">
+    <div class="pattern-header">
+      <div class="pattern-icon">📤</div>
+      <div>
+        <div class="pattern-title">Fan-Out — 1 Lambda → 2 sinks</div>
+        <div class="pattern-sub">S3-first write ordering</div>
+      </div>
+    </div>
+    <ul>
+      <li>Lambda reads SQS batch, writes to <strong>S3 first</strong> (PutObject + Legal Hold)</li>
+      <li>ClickHouse INSERT is second — uses S3 keys as evidence pointers</li>
+      <li>If ClickHouse is down: S3 is the truth. Athena can query the evidence directly</li>
+      <li>If S3 write fails: Lambda throws, message returns to SQS queue (visibility timeout)</li>
+      <li>Fan-out is <strong>ordered by criticality</strong>, not parallel — compliance evidence before index</li>
+    </ul>
+    <div class="warn-box">S3 Object Lock COMPLIANCE makes objects permanently immutable — even root cannot delete. Legal Hold requires compliance-officer IAM role + MFA (D7 pending).</div>
+  </div>
+
+  <div class="pattern-card" style="border-color:#d29922">
+    <div class="pattern-header">
+      <div class="pattern-icon">🔌</div>
+      <div>
+        <div class="pattern-title">Sidecar / Plug-and-Play</div>
+        <div class="pattern-sub">Zero-coupling library design</div>
+      </div>
+    </div>
+    <ul>
+      <li><code>VendorLoggerModule.forRoot(opts)</code> is a NestJS dynamic module — installed in one import line</li>
+      <li>No changes to existing vendor service code — only wrap calls in <code>vendorHttp.call()</code></li>
+      <li>Fail-open guarantee: logger errors never break the vendor call chain</li>
+      <li>Ring buffer is in-process — no sidecar process or daemon needed</li>
+      <li>Library is framework-version-agnostic (NestJS v10 + v11 via peer-dep range)</li>
+    </ul>
+    <div class="info-box">Upgrading the library does not require changes to the host service's business logic — only the module registration config.</div>
+  </div>
+
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §04 CODE REVIEW FINDINGS
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§04 — Code Review Findings</h2>
+<p style="color:var(--muted);margin-bottom:20px;font-size:13px">
+  Reviewed against production-safety, RBI compliance, and the NFRs in the TDD. Severity:
+  <span class="tag tag-bug">BUG</span> = must fix before prod ·
+  <span class="tag tag-improve">IMPROVE</span> = should fix before prod ·
+  <span class="tag tag-design">DESIGN</span> = discussion / phase 2
+</p>
+
+<!-- BUG 1 -->
+<div class="review-item bug">
+  <span class="tag tag-bug">BUG · HIGH</span>
+  <h4>SqsDrainService — events permanently lost on SQS partial failure</h4>
+  <p>
+    <code>drainOnce()</code> calls <code>buffer.drain(100)</code> BEFORE sending to SQS. If <code>sendBatches()</code>
+    throws (network error, SQS throttle), those 100 events are already removed from the ring buffer — they're gone.
+    The <code>Failed</code> array in the batch response is logged but not re-queued either.
+    This silently drops compliance events, violating the RBI retention guarantee.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">FIX — re-enqueue on failure</div>
+    <pre>private async drainOnce(): Promise&lt;void&gt; {
+  if (this.draining || this.buffer.size === 0) return;
+  this.draining = true;
+  const events = this.buffer.drain(MAX_DRAIN_PER_TICK);
+  try {
+    await this.sendBatches(events);
+  } catch (err) {
+    // Re-enqueue so events aren't lost on transient SQS failure
+    for (const e of events) this.buffer.push(e);
+    this.logger.error('SQS drain failed — re-enqueued events', err);
+  } finally {
+    this.draining = false;
+  }
+}</pre>
+    <p style="color:var(--muted);font-size:12px;margin-top:8px">Also handle <code>result.Failed</code>: re-enqueue those specific events only.</p>
+  </div>
+</div>
+
+<!-- BUG 2 -->
+<div class="review-item bug">
+  <span class="tag tag-bug">BUG · MEDIUM</span>
+  <h4>requestHash computed post-truncation — breaks audit integrity</h4>
+  <p>
+    In <code>buildEvent()</code>, <code>requestHash = pii.hashPayload(reqStr)</code> is computed <em>after</em>
+    <code>serializePayloads()</code> which may truncate <code>reqStr</code>. This means the stored hash is of
+    the <em>truncated</em> string, not the original vendor request. An RBI auditor cannot verify the original
+    payload using this hash — it's a broken chain of custody.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">FIX — hash the original, flag truncation separately</div>
+    <pre>// In serializePayloads(), return the original before truncation
+const originalReqStr = JSON.stringify(req) ?? '';
+const requestHash = pii.hashPayload(originalReqStr);  // ← hash of FULL payload
+// then truncate for storage
+const reqStr = truncate(originalReqStr, maxBytes);
+return { reqStr, resStr, truncated, requestHash };</pre>
+  </div>
+</div>
+
+<!-- IMPROVE 1 -->
+<div class="review-item improve">
+  <span class="tag tag-improve">IMPROVE · HIGH</span>
+  <h4>No per-message SQS size guard — single event could exceed 256KB SQS limit</h4>
+  <p>
+    SQS hard limit is 256KB per message body. The 128KB payload truncation per field helps,
+    but the full event JSON includes many other fields. A ClickHouse errorMessage containing a
+    large stack trace, combined with both payloads near 128KB, could produce a &gt;256KB message —
+    which SQS silently rejects.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">FIX — add message-level size check in sendBatches()</div>
+    <pre>const SQS_MAX_MSG_BYTES = 256 * 1024;
+
+entries.map(e => {
+  if (Buffer.byteLength(e.MessageBody, 'utf8') > SQS_MAX_MSG_BYTES) {
+    // fallback: strip payloads, keep metadata
+    const small = { ...JSON.parse(e.MessageBody),
+      requestPayload: '[OVERSIZED]', responsePayload: '[OVERSIZED]', payloadTruncated: true };
+    e.MessageBody = JSON.stringify(small);
+  }
+  return e;
+});</pre>
+  </div>
+</div>
+
+<!-- IMPROVE 2 -->
+<div class="review-item improve">
+  <span class="tag tag-improve">IMPROVE · MEDIUM</span>
+  <h4>Metrics http_status label causes cardinality explosion</h4>
+  <p>
+    <code>http_status: String(httpStatus)</code> in the Counter label creates a unique time series
+    per distinct HTTP status code per vendor per endpoint. With Karza returning custom error codes like
+    <code>422, 429, 403, 409, 499</code>, this multiplies time series count fast.
+    Prometheus recommends max ~10 values per label.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">FIX — normalize to bands</div>
+    <pre>function statusBand(code: number): string {
+  if (code === 0)   return 'no_response';
+  if (code &lt; 200) return '1xx';
+  if (code &lt; 300) return '2xx';
+  if (code &lt; 400) return '3xx';
+  if (code &lt; 500) return '4xx';
+  return '5xx';
+}
+// in recordCall():
+this.callCounter.inc({ ...base, http_status: statusBand(httpStatus) });</pre>
+  </div>
+</div>
+
+<!-- IMPROVE 3 -->
+<div class="review-item improve">
+  <span class="tag tag-improve">IMPROVE · MEDIUM</span>
+  <h4>enqueue() warning message has wrong capacity display</h4>
+  <p>
+    The warn log says <code>capacity=${this.buffer.size}</code> but <code>buffer.size</code>
+    returns the current count of items, not the capacity. When full, they're equal — but the message
+    is semantically wrong. Add a <code>capacity</code> getter to <code>RingBuffer</code>.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">FIX</div>
+    <pre>// In RingBuffer:
+get capacity(): number { return this.capacity_; }
+
+// In enqueue():
+`Ring buffer full (size=${this.buffer.capacity}) — oldest event dropped`</pre>
+  </div>
+</div>
+
+<!-- DESIGN 1 -->
+<div class="review-item design">
+  <span class="tag tag-design">DESIGN</span>
+  <h4>Lambda mapping gap — s3_request_key and s3_response_key not in VendorApiEvent</h4>
+  <p>
+    The ClickHouse schema has <code>s3_request_key</code> and <code>s3_response_key</code> columns
+    (the S3 object path for each payload). These are generated by Lambda after the S3 write.
+    There is currently no documented mapping of how Lambda transforms a <code>VendorApiEvent</code>
+    (SQS message) into a ClickHouse row including these columns. The Lambda code doesn't exist yet —
+    this needs to be specced before Lambda implementation.
+  </p>
+  <div class="fix-block">
+    <div class="fix-label">S3 KEY CONVENTION (proposed)</div>
+    <pre>// vendor_id={vendorId}/event_date={YYYY-MM-DD}/request_id={uuid}/request.json.zst
+// vendor_id={vendorId}/event_date={YYYY-MM-DD}/request_id={uuid}/response.json.zst
+const dateStr = event.createdAt.substring(0, 10);
+const s3RequestKey = `vendor_id=${event.vendorId}/event_date=${dateStr}/request_id=${event.requestId}/request.json.zst`;
+const s3ResponseKey = `vendor_id=${event.vendorId}/event_date=${dateStr}/request_id=${event.requestId}/response.json.zst`;</pre>
+  </div>
+</div>
+
+<!-- DESIGN 2 -->
+<div class="review-item design">
+  <span class="tag tag-design">DESIGN</span>
+  <h4>No dead-letter queue (DLQ) alarm on the SQS queue</h4>
+  <p>
+    If Lambda consistently fails to process a message (malformed event, schema mismatch), it will
+    retry until the visibility timeout expires, consuming concurrency slots and delaying real events.
+    A DLQ with CloudWatch alarm on <code>ApproximateNumberOfMessagesVisible &gt; 0</code> is needed.
+    This is infra-level, not library-level — but needs to be in the Terraform module.
+  </p>
+</div>
+
+<!-- OK items -->
+<div style="margin-top:24px">
+  <h3 style="margin-bottom:12px;color:var(--green)">Confirmed correct</h3>
+  <div class="grid-2">
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">Fail-open correctly implemented</strong>
+      <span style="color:var(--muted);font-size:12px">logEvent() is fully wrapped in try/catch. Logger errors are silently swallowed. Vendor response always returned.</span>
+    </div>
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">RingBuffer overflow semantics</strong>
+      <span style="color:var(--muted);font-size:12px">Oldest event is dropped when buffer is full. push() returns bool. Wrap-around tested with 11 cases.</span>
+    </div>
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">HMAC-SHA256 salt isolation</strong>
+      <span style="color:var(--muted);font-size:12px">Mobile and Aadhaar use separate salts. Same last-4 digits hash to different values. E.164 normalization before mobile hash.</span>
+    </div>
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">drainTimer.unref() correct</strong>
+      <span style="color:var(--muted);font-size:12px">setInterval with unref() means the timer won't prevent Node.js from exiting on shutdown. onModuleDestroy does a final drain attempt.</span>
+    </div>
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">5-state error categorization</strong>
+      <span style="color:var(--muted);font-size:12px">ECONNABORTED/ETIMEDOUT → TIMEOUT. ECONNREFUSED/ENOTFOUND/ECONNRESET → NETWORK_ERROR. Everything else → FAILURE. Tested with 6 cases.</span>
+    </div>
+    <div style="background:var(--surface2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--green)">
+      <span class="tag tag-ok">OK</span>
+      <strong style="display:block;margin-bottom:4px;font-size:13px">AsyncLocalStorage propagation</strong>
+      <span style="color:var(--muted);font-size:12px">CorrelationContext.run() wraps the request. All async descendants (including vendor calls) inherit the same correlationId store.</span>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §05 CLICKHOUSE CONNECTION DESIGN
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§05 — ClickHouse Connection (Lambda → ClickHouse)</h2>
+<p style="color:var(--muted);margin-bottom:20px;font-size:13px">
+  The library itself never connects to ClickHouse. The Lambda consumer reads SQS, writes S3, then INSERTs into ClickHouse via HTTP.
+</p>
+
+<div class="two-col">
+<div>
+  <h3 style="margin-bottom:16px">Connection design</h3>
+
+  <div class="ch-step">
+    <div class="ch-num">1</div>
+    <div class="ch-content">
+      <h4>Client: <code>@clickhouse/client</code> (official)</h4>
+      <p>HTTP interface on port 8123 — stateless, perfect for Lambda. No TCP connection pooling needed. Uses KeepAlive internally for same-invocation batches.</p>
+    </div>
+  </div>
+
+  <div class="ch-step">
+    <div class="ch-num">2</div>
+    <div class="ch-content">
+      <h4>async_insert mode</h4>
+      <p><code>async_insert=1, wait_for_async_insert=0</code> — Lambda fires INSERT and returns. ClickHouse buffers and flushes to MergeTree. Reduces Lambda duration cost, acceptable for compliance (not OLTP).</p>
+    </div>
+  </div>
+
+  <div class="ch-step">
+    <div class="ch-num">3</div>
+    <div class="ch-content">
+      <h4>VPC internal — no public endpoint</h4>
+      <p>Lambda and ClickHouse EC2 are in the same private subnet. Connection string: <code>http://10.0.x.x:8123</code> (private IP or Route53 private hosted zone).</p>
+    </div>
+  </div>
+
+  <div class="ch-step">
+    <div class="ch-num">4</div>
+    <div class="ch-content">
+      <h4>Auth: username + password from Secrets Manager</h4>
+      <p>ClickHouse user <code>vendor_archive_writer</code> with INSERT-only permission on <code>vendor_archive.vendor_api_events</code>. Credentials in Secrets Manager, fetched at Lambda cold start.</p>
+    </div>
+  </div>
+
+  <div class="ch-step">
+    <div class="ch-num">5</div>
+    <div class="ch-content">
+      <h4>S3 keys added by Lambda (not library)</h4>
+      <p>Lambda generates <code>s3_request_key</code> / <code>s3_response_key</code> after writing to S3. These are appended to the event before ClickHouse INSERT.</p>
+    </div>
+  </div>
+</div>
+
+<div>
+  <h3 style="margin-bottom:16px">Lambda skeleton code</h3>
+  <pre><span style="color:#6a9955">// lambda/vendor-archive-ingest/index.ts</span>
+import { createClient } from '@clickhouse/client';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SQSHandler, SQSRecord } from 'aws-lambda';
+import { VendorApiEvent } from '@finagle/vendor-logger';
+import { compress } from '@aws-sdk/util-gzip';
+
+<span style="color:#6a9955">// Cold-start singletons</span>
+const s3 = new S3Client({ region: 'ap-south-1' });
+const ch = createClient({
+  url: process.env.CLICKHOUSE_URL,      <span style="color:#6a9955">// http://10.0.x.x:8123</span>
+  username: process.env.CH_USER,
+  password: process.env.CH_PASSWORD,
+  database: 'vendor_archive',
+  clickhouse_settings: {
+    async_insert: 1,
+    wait_for_async_insert: 0,
+  },
+});
+
+export const handler: SQSHandler = async (sqsEvent) => {
+  const rows: ClickHouseRow[] = [];
+
+  for (const record of sqsEvent.Records) {
+    const event: VendorApiEvent = JSON.parse(record.body);
+    const dateStr = event.createdAt.substring(0, 10);
+    const base = `vendor_id=${event.vendorId}/event_date=${dateStr}/request_id=${event.requestId}`;
+
+    <span style="color:#6a9955">// ① S3 FIRST — compliance evidence</span>
+    const s3RequestKey = `${base}/request.json.zst`;
+    const s3ResponseKey = `${base}/response.json.zst`;
+
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.ARCHIVE_BUCKET,
+      Key: s3RequestKey,
+      Body: await compress(event.requestPayload),
+      ContentEncoding: 'gzip',
+      ContentType: 'application/json',
+      ObjectLockMode: 'COMPLIANCE',
+    }));
+
+    <span style="color:#6a9955">// KMS encrypt aadhaar last4 (via Secrets Manager CMK)</span>
+    const aadhaarEncrypted = event.aadhaarLast4Hash
+      ? await kmsEncrypt(event.aadhaarLast4Hash)
+      : undefined;
+
+    rows.push(toClickHouseRow(event, s3RequestKey, s3ResponseKey, aadhaarEncrypted));
+  }
+
+  <span style="color:#6a9955">// ② ClickHouse SECOND — hot index</span>
+  await ch.insert({
+    table: 'vendor_api_events',
+    values: rows,
+    format: 'JSONEachRow',
+  });
+};</pre>
+</div>
+</div>
+
+<h3 style="margin-top:28px;margin-bottom:16px">SQS event → ClickHouse column mapping</h3>
+<table class="status-table">
+  <thead>
+    <tr>
+      <th>SQS / VendorApiEvent field</th>
+      <th>ClickHouse column</th>
+      <th>Transformation</th>
+      <th>Added by</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>requestId</code></td><td><code>request_id UUID</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>correlationId</code></td><td><code>correlation_id String</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>createdAt</code></td><td><code>created_at DateTime64(3)</code></td><td>ISO8601 → DateTime</td><td>Library</td></tr>
+    <tr><td><em>(Lambda insertion time)</em></td><td><code>ingested_at DateTime64(3)</code></td><td>now() at INSERT</td><td>Lambda</td></tr>
+    <tr><td><code>service</code></td><td><code>service LowCardinality(String)</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>vendorId</code></td><td><code>vendor_id LowCardinality(String)</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>panMasked</code></td><td><code>pan_masked Nullable(String)</code></td><td>direct (already masked)</td><td>Library</td></tr>
+    <tr><td><code>mobileHash</code></td><td><code>mobile_hash Nullable(String)</code></td><td>direct (HMAC hex)</td><td>Library</td></tr>
+    <tr><td><code>mobileLast4</code></td><td><code>mobile_last4 Nullable(FixedString(4))</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>aadhaarLast4Hash</code></td><td><code>aadhaar_last4_hash Nullable(String)</code></td><td>direct (HMAC hex)</td><td>Library</td></tr>
+    <tr><td><em>(KMS encrypt in Lambda)</em></td><td><code>aadhaar_last4_encrypted Nullable(String)</code></td><td>KMS CMK encrypt</td><td>Lambda</td></tr>
+    <tr><td><code>status</code></td><td><code>status LowCardinality(String)</code></td><td>direct</td><td>Library</td></tr>
+    <tr><td><code>requestPayload</code></td><td><code>request_payload String CODEC(ZSTD(3))</code></td><td>direct (may be truncated)</td><td>Library</td></tr>
+    <tr><td><code>responsePayload</code></td><td><code>response_payload String CODEC(ZSTD(3))</code></td><td>direct (may be truncated)</td><td>Library</td></tr>
+    <tr><td><em>(generated after S3 write)</em></td><td><code>s3_request_key String</code></td><td>S3 path string</td><td>Lambda</td></tr>
+    <tr><td><em>(generated after S3 write)</em></td><td><code>s3_response_key String</code></td><td>S3 path string</td><td>Lambda</td></tr>
+  </tbody>
+</table>
+
+<div class="warn-box" style="margin-top:20px">
+  <strong>D4 — Pending counsel sign-off:</strong> Before Lambda goes live with Object Lock COMPLIANCE, compliance counsel must confirm that S3 Object Lock COMPLIANCE satisfies RBI's digital lending data retention requirement AND that the DPDP erasure conflict (D9) is resolved. Do not merge Lambda infra until D4 is closed.
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §06 NEXT STEPS
+════════════════════════════════════════════════════════ -->
+<section>
+<h2>§06 — Next Steps</h2>
+<div class="grid-3">
+  <div class="card red">
+    <div class="tag tag-bug" style="margin-bottom:10px">FIX FIRST</div>
+    <h3 style="margin-bottom:8px">Apply code review fixes</h3>
+    <ul>
+      <li>Re-enqueue on SQS drain failure</li>
+      <li>Move requestHash before truncation</li>
+      <li>Add 256KB per-message guard</li>
+      <li>Fix cardinality on http_status label</li>
+    </ul>
+  </div>
+  <div class="card yellow">
+    <div class="tag tag-improve" style="margin-bottom:10px">NEXT SPRINT</div>
+    <h3 style="margin-bottom:8px">Lambda consumer</h3>
+    <ul>
+      <li>S3 PutObject + Legal Hold</li>
+      <li>KMS encrypt aadhaar_last4</li>
+      <li>ClickHouse INSERT via <code>@clickhouse/client</code></li>
+      <li>DLQ + CloudWatch alarm</li>
+    </ul>
+  </div>
+  <div class="card accent">
+    <div class="tag tag-design" style="margin-bottom:10px">PHASE 2</div>
+    <h3 style="margin-bottom:8px">Close open decisions</h3>
+    <ul>
+      <li>D4 — counsel sign-off on Object Lock</li>
+      <li>D7 — compliance-officer IAM role</li>
+      <li>D9 — DPDP erasure vs Object Lock</li>
+      <li>D2 — ClickHouse HA (ReplicatedMergeTree)</li>
+    </ul>
+  </div>
+</div>
+<p style="margin-top:20px;color:var(--muted);font-size:12px">Generated 2026-05-29 · @finagle/vendor-logger v0.1.0 · 50 tests · build clean</p>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,46 @@
+# ── Terraform ─────────────────────────────────────────────────────────────────
+# Local provider/plugin cache and module downloads
+**/.terraform/
+# State files — may contain secrets, managed remotely (S3 backend)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+# Saved plans — can contain sensitive values
+*.tfplan
+*.tfplan.*
+# Crash logs
+crash.log
+crash.*.log
+# Local var overrides (real values injected via TF_VAR_ env vars)
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# NOTE: .terraform.lock.hcl is intentionally committed (pins provider versions)
+
+# ── Node / Lambda ─────────────────────────────────────────────────────────────
+node_modules/
+# Build output / bundled artifacts
+dist/
+*.zip
+# Logs & caches
+*.log
+npm-debug.log*
+.npm/
+coverage/
+.eslintcache
+
+# ── Secrets / local env ───────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+secrets*.json
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,112 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION  = "ap-south-2"
+        ACCOUNT_ID  = "761520024839"
+        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tezcredit/finagle_vendor_logger"
+
+        EC2_HOST    = "98.130.99.33"
+        EC2_USER    = "ubuntu"
+        DEPLOY_DIR  = "/home/ubuntu/finagle_vendor_logger"
+
+        // SQS URL lives here (non-secret) instead of .env.dev — written to
+        // .env.secrets on the host at deploy time.
+        VENDOR_ARCHIVE_SQS_URL = "https://sqs.ap-south-2.amazonaws.com/761520024839/vendor-archive-staging-vendor-events-q"
+    }
+
+    parameters {
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
+        string(name: 'IMAGE_TAG_NAME', defaultValue: 'release', description: 'Custom image tag prefix')
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.GIT_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: 'git@github.com:TezCredit/finagle_vendor_logger.git',
+                        credentialsId: 'github-ssh-key'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Build Docker Image & Push') {
+            steps {
+                script {
+                    env.IMAGE_TAG = "${params.IMAGE_TAG_NAME}-${BUILD_NUMBER}"
+                }
+                sh '''
+                aws ecr get-login-password --region $AWS_REGION \
+                | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+                IMAGE_TAG="${IMAGE_TAG_NAME}-${BUILD_NUMBER}"
+
+                docker build -f Dockerfile-dev -t $ECR_REPO:$IMAGE_TAG .
+
+                docker push $ECR_REPO:$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                sshagent(['ec2-ssh-key']) {
+                    // 1) Build .env.secrets on the host:
+                    //    - hash salts are read from AWS Secrets Manager here in Jenkins
+                    //      (single source of truth; Jenkins' AWS creds), so the values
+                    //      never live as Jenkins string credentials.
+                    //    - SQS URL comes from the Jenkinsfile env above.
+                    //    All three are piped over SSH stdin (never on the remote command
+                    //    line / process list).
+                    sh '''
+MOBILE_HASH_SALT=$(aws secretsmanager get-secret-value --region $AWS_REGION \
+  --secret-id vendor-archive-staging/vendor-logger/mobile-hash-salt  --query SecretString --output text)
+AADHAAR_HASH_SALT=$(aws secretsmanager get-secret-value --region $AWS_REGION \
+  --secret-id vendor-archive-staging/vendor-logger/aadhaar-hash-salt --query SecretString --output text)
+
+printf 'VENDOR_ARCHIVE_SQS_URL=%s\\nMOBILE_HASH_SALT=%s\\nAADHAAR_HASH_SALT=%s\\n' \
+  "$VENDOR_ARCHIVE_SQS_URL" "$MOBILE_HASH_SALT" "$AADHAAR_HASH_SALT" \
+| ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} "umask 077; cat > ${DEPLOY_DIR}/.env.secrets && chmod 600 ${DEPLOY_DIR}/.env.secrets"
+'''
+                    // 2) Point compose at the new image tag and roll out.
+                    sh """
+ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+cd ${DEPLOY_DIR}
+cp docker-compose-dev.yml docker-compose-dev.yml.bak
+sed -i "/finagle-vendor-logger:/,/^  [a-z]/{s|image:.*|image: ${ECR_REPO}:${IMAGE_TAG}|}" docker-compose-dev.yml
+aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+docker compose -f docker-compose-dev.yml pull
+docker compose -f docker-compose-dev.yml up -d
+'
+"""
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            sh 'docker image prune -a -f'
+
+            sshagent(['ec2-ssh-key']) {
+                sh """
+ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker image prune -a -f'
+"""
+            }
+        }
+
+        failure {
+            echo "Deployment failure "
+        }
+
+        success {
+            echo "Deployment successful 🚀"
+        }
+    }
+}

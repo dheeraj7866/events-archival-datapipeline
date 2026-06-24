@@ -1,0 +1,152 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CLICKHOUSE",
+      "label": "ClickHouse",
+      "type": "datasource",
+      "pluginId": "grafana-clickhouse-datasource"
+    },
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+  ],
+  "title": "Vendor API — Failure Rate",
+  "uid": "vendor-failure-rate",
+  "description": "Per-vendor failure rate across all services. P1 vendors in top row, P2 below.",
+  "tags": ["vendor", "failure", "compliance"],
+  "timezone": "Asia/Kolkata",
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "vendor",
+        "label": "Vendor",
+        "type": "query",
+        "datasource": "${DS_PROMETHEUS}",
+        "query": "label_values(vendor_api_calls_total, vendor_id)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": "${DS_PROMETHEUS}",
+        "query": "label_values(vendor_api_calls_total, service)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "window",
+        "label": "Window",
+        "type": "interval",
+        "options": ["1m", "5m", "15m", "1h"],
+        "current": "5m"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Overall failure rate (last 5m)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) / sum(rate(vendor_api_calls_total{vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) * 100",
+          "legendFormat": "Failure %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total calls (last 5m)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum(rate(vendor_api_calls_total{vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) * 60 * 5",
+          "legendFormat": "Calls"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Failure rate by vendor (P1 only)",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum by (vendor_id) (rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"easebuzz|synoriq|icici-bank|internal-bre\"}[$window])) / sum by (vendor_id) (rate(vendor_api_calls_total{vendor_id=~\"easebuzz|synoriq|icici-bank|internal-bre\"}[$window])) * 100",
+          "legendFormat": "{{vendor_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Failure rate by vendor (P2)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum by (vendor_id) (rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"digitap|signzy\"}[$window])) / sum by (vendor_id) (rate(vendor_api_calls_total{vendor_id=~\"digitap|signzy\"}[$window])) * 100",
+          "legendFormat": "{{vendor_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent" }
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Failure breakdown by vendor + endpoint (ClickHouse — last 1h)",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 10 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, status, count() AS calls, round(avg(latency_ms)) AS avg_latency_ms FROM vendor_archive.vendor_api_events WHERE created_at >= now() - INTERVAL 1 HOUR AND vendor_id IN ('easebuzz','synoriq','icici-bank','internal-bre','digitap','signzy') GROUP BY vendor_id, endpoint, status ORDER BY calls DESC LIMIT 100",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

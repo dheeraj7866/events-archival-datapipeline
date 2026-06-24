@@ -1,0 +1,126 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION  = "ap-south-1"
+        ACCOUNT_ID  = "761520024839"
+        // ECR repo must exist in ap-south-1 (prod region):
+        //   aws ecr create-repository --repository-name tezcredit/finagle_vendor_logger --region ap-south-1
+        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tezcredit/finagle_vendor_logger"
+
+        EC2_HOST    = "13.207.231.147"   // prod vendor-logger-svc host (ap-south-1, stable Elastic IP)
+        EC2_USER    = "ubuntu"
+        DEPLOY_DIR  = "/home/ubuntu/finagle_vendor_logger"
+    }
+
+    parameters {
+        string(name: 'GIT_BRANCH',     defaultValue: 'main',    description: 'Branch/tag to build for prod')
+        string(name: 'IMAGE_TAG_NAME', defaultValue: 'release', description: 'Custom image tag prefix')
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.GIT_BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: 'git@github.com:TezCredit/finagle_vendor_logger.git',
+                        credentialsId: 'github-ssh-key'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Build Docker Image & Push') {
+            steps {
+                script {
+                    env.IMAGE_TAG = "${params.IMAGE_TAG_NAME}-${BUILD_NUMBER}"
+                }
+                sh '''
+                aws ecr get-login-password --region $AWS_REGION \
+                | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+                IMAGE_TAG="${IMAGE_TAG_NAME}-${BUILD_NUMBER}"
+
+                docker build -f Dockerfile-prod -t $ECR_REPO:$IMAGE_TAG .
+
+                docker push $ECR_REPO:$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Deploy to EC2') {
+            steps {
+                // Secrets sourcing (single source of truth):
+                //   - Hash salts          → AWS Secrets Manager, fetched ON THE HOST at
+                //                            deploy time via the vendor-logger-svc role
+                //                            (secretsmanager:GetSecretValue on the salt ARNs).
+                //                            Same secrets Terraform manages — no Jenkins copy.
+                //   - VENDOR_ARCHIVE_SQS_URL → Jenkins credential (not in Secrets Manager).
+                //       Jenkins credential: vl-prod-sqs-url
+                withCredentials([
+                    string(credentialsId: 'vl-prod-sqs-url', variable: 'VENDOR_ARCHIVE_SQS_URL')
+                ]) {
+                    sshagent(['ec2-ssh-key']) {
+                        // 1) Build .env.secrets ON THE HOST:
+                        //    - SQS URL is piped over SSH stdin (never on the remote command
+                        //      line / process list; Jenkins masks it in console logs).
+                        //    - Salts are read straight from Secrets Manager by the host role,
+                        //      so the salt values never transit Jenkins at all.
+                        sh '''
+printf '%s\\n' "$VENDOR_ARCHIVE_SQS_URL" \
+| ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+set -euo pipefail
+read -r SQS_URL
+REGION=ap-south-1
+DIR=/home/ubuntu/finagle_vendor_logger
+MOBILE_SALT=$(aws secretsmanager get-secret-value --region "$REGION" \
+  --secret-id vendor-archive-prod/vendor-logger/mobile-hash-salt  --query SecretString --output text)
+AADHAAR_SALT=$(aws secretsmanager get-secret-value --region "$REGION" \
+  --secret-id vendor-archive-prod/vendor-logger/aadhaar-hash-salt --query SecretString --output text)
+umask 077
+printf "VENDOR_ARCHIVE_SQS_URL=%s\\nMOBILE_HASH_SALT=%s\\nAADHAAR_HASH_SALT=%s\\n" \
+  "$SQS_URL" "$MOBILE_SALT" "$AADHAAR_SALT" > "$DIR/.env.secrets"
+chmod 600 "$DIR/.env.secrets"
+'
+'''
+                        // 2) Point the prod compose file at the new image tag and roll out.
+                        sh """
+ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+cd ${DEPLOY_DIR}
+cp docker-compose.prod.yml docker-compose.prod.yml.bak
+sed -i "/finagle-vendor-logger:/,/^  [a-z]/{s|image:.*|image: ${ECR_REPO}:${IMAGE_TAG}|}" docker-compose.prod.yml
+aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+'
+"""
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            sh 'docker image prune -a -f'
+
+            sshagent(['ec2-ssh-key']) {
+                sh """
+ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'docker image prune -a -f'
+"""
+            }
+        }
+
+        failure {
+            echo "Prod deployment failure"
+        }
+
+        success {
+            echo "Prod deployment successful 🚀"
+        }
+    }
+}

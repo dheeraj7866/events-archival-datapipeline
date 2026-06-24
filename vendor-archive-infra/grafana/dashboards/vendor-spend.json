@@ -1,0 +1,110 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CLICKHOUSE",
+      "label": "ClickHouse",
+      "type": "datasource",
+      "pluginId": "grafana-clickhouse-datasource"
+    }
+  ],
+  "title": "Vendor API — Cost / Spend",
+  "uid": "vendor-spend",
+  "description": "Per-vendor and per-endpoint cost in paise and INR. Sourced from ClickHouse cost_paise column. Wired from day one per HLD A3.",
+  "tags": ["vendor", "cost", "finance"],
+  "timezone": "Asia/Kolkata",
+  "refresh": "5m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "date_range",
+        "label": "Date Range",
+        "type": "interval",
+        "options": ["1h", "24h", "7d", "30d"],
+        "current": "24h"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total spend today (₹)",
+      "gridPos": { "x": 0, "y": 0, "w": 5, "h": 4 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT sum(cost_paise) / 100.0 AS total_inr FROM vendor_archive.vendor_api_events WHERE toDate(created_at) = today() AND cost_paise IS NOT NULL",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyINR",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total spend this month (₹)",
+      "gridPos": { "x": 5, "y": 0, "w": 5, "h": 4 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT sum(cost_paise) / 100.0 AS total_inr FROM vendor_archive.vendor_api_events WHERE toStartOfMonth(created_at) = toStartOfMonth(today()) AND cost_paise IS NOT NULL",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyINR",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Daily spend by vendor (last 30 days)",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT toDate(created_at) AS day, vendor_id, sum(cost_paise) / 100.0 AS spend_inr FROM vendor_archive.vendor_api_events WHERE created_at >= today() - 30 AND cost_paise IS NOT NULL GROUP BY day, vendor_id ORDER BY day, vendor_id",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Cost breakdown by vendor + endpoint (last 24h)",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 10 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, count() AS calls, sum(cost_paise) AS total_paise, round(sum(cost_paise) / 100.0, 2) AS total_inr, round(avg(cost_paise), 2) AS avg_paise_per_call FROM vendor_archive.vendor_api_events WHERE created_at >= now() - INTERVAL 24 HOUR AND cost_paise IS NOT NULL GROUP BY vendor_id, endpoint ORDER BY total_paise DESC",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Hourly spend (₹) — all vendors",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfHour(created_at) AS hour, vendor_id, sum(cost_paise) / 100.0 AS spend_inr FROM vendor_archive.vendor_api_events WHERE created_at >= now() - INTERVAL 48 HOUR AND cost_paise IS NOT NULL GROUP BY hour, vendor_id ORDER BY hour",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyINR", "decimals": 2 }
+      }
+    }
+  ]
+}

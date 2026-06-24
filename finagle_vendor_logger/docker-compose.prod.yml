@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  finagle-vendor-logger:
+    image: 761520024839.dkr.ecr.ap-south-1.amazonaws.com/tezcredit/finagle_vendor_logger:latest
+    container_name: finagle-vendor-logger
+    labels:
+      - "service=finagle-vendor-logger"
+      - "env=prod"
+    ports:
+      - "9013:3013"
+    # Non-secret config from .env.prod; secrets (SQS URL + hash salts) from
+    # .env.secrets, written by Jenkinsfile-prod at deploy time from Jenkins
+    # credentials. Both live on the prod EC2 host (never committed).
+    env_file:
+      - .env.prod
+      - .env.secrets
+    restart: unless-stopped

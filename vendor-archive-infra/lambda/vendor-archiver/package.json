@@ -1,0 +1,33 @@
+{
+  "name": "vendor-archiver",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lambda: batches SQS vendor events into ClickHouse + S3 archive",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "bundle": "npm run build && cd dist && zip -r ../vendor-archiver.zip . ../node_modules",
+    "test": "jest --coverage",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-sqs": "^3.1057.0",
+    "@clickhouse/client": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

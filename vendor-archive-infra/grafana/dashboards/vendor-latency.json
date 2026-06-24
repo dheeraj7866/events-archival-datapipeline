@@ -1,0 +1,117 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    },
+    {
+      "name": "DS_CLICKHOUSE",
+      "label": "ClickHouse",
+      "type": "datasource",
+      "pluginId": "grafana-clickhouse-datasource"
+    }
+  ],
+  "title": "Vendor API — Latency (P50 / P95 / P99)",
+  "uid": "vendor-latency",
+  "description": "Per-vendor call latency percentiles. NFR5 target: <1ms added overhead from logger. NFR6: p95 <5s from ClickHouse.",
+  "tags": ["vendor", "latency", "nfr"],
+  "timezone": "Asia/Kolkata",
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "vendor",
+        "label": "Vendor",
+        "type": "query",
+        "datasource": "${DS_PROMETHEUS}",
+        "query": "label_values(vendor_api_latency_ms_bucket, vendor_id)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "window",
+        "label": "Window",
+        "type": "interval",
+        "options": ["1m", "5m", "15m", "1h"],
+        "current": "5m"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "P95 latency by vendor",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 9 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (vendor_id, le) (rate(vendor_api_latency_ms_bucket{vendor_id=~\"$vendor\"}[$window])))",
+          "legendFormat": "p95 {{vendor_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 2000 },
+              { "color": "red", "value": 5000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "P50 / P99 latency — all vendors",
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (vendor_id, le) (rate(vendor_api_latency_ms_bucket{vendor_id=~\"$vendor\"}[$window])))",
+          "legendFormat": "p50 {{vendor_id}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (vendor_id, le) (rate(vendor_api_latency_ms_bucket{vendor_id=~\"$vendor\"}[$window])))",
+          "legendFormat": "p99 {{vendor_id}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Latency stats by vendor + endpoint (ClickHouse — last 1h)",
+      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 10 },
+      "datasource": "${DS_CLICKHOUSE}",
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, count() AS calls, quantile(0.50)(latency_ms) AS p50_ms, quantile(0.95)(latency_ms) AS p95_ms, quantile(0.99)(latency_ms) AS p99_ms, max(latency_ms) AS max_ms FROM vendor_archive.vendor_api_events WHERE created_at >= now() - INTERVAL 1 HOUR GROUP BY vendor_id, endpoint ORDER BY p95_ms DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Timeout count by vendor",
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "datasource": "${DS_PROMETHEUS}",
+      "targets": [
+        {
+          "expr": "sum by (vendor_id) (rate(vendor_api_calls_total{status=\"TIMEOUT\",vendor_id=~\"$vendor\"}[$window]))",
+          "legendFormat": "timeouts {{vendor_id}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    }
+  ]
+}

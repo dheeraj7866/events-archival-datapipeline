@@ -1,0 +1,248 @@
+# Alertmanager rules — Vendor API Archive + Monitoring
+# Aligned to P1/P2/P3 tiers from HLD §03 (A2)
+#
+# P1 (revenue-blocking): easebuzz, icici-bank, synoriq, internal-bre
+# P2 (funnel-blocking):  digitap, signzy
+# P3 (non-critical):     appsflyer, internal-dedupe
+#
+# Routing: P1 → PagerDuty (immediate) → Slack #alerts-critical
+#          P2 → Slack #alerts-p2 (15m silence)
+#          P3 → Slack #alerts-p3 (1h silence)
+
+groups:
+
+  # ── P1: Revenue-blocking vendors ───────────────────────────────────────────
+  - name: vendor.p1.failure_rate
+    rules:
+      - alert: VendorP1FailureRateHigh
+        expr: |
+          (
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                status=~"FAILURE|TIMEOUT|NETWORK_ERROR",
+                vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+              }[5m])
+            )
+            /
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+              }[5m])
+            )
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          tier: P1
+        annotations:
+          summary: "P1 vendor {{ $labels.vendor_id }} failure rate {{ $value | humanize }}%"
+          description: >
+            {{ $labels.vendor_id }} failure rate is {{ $value | humanize }}% over the last 5 minutes.
+            This is a revenue-blocking vendor. Investigate immediately.
+          runbook_url: "https://wiki.internal/runbooks/vendor-archive/p1-failure"
+          dashboard_url: "https://grafana.internal/d/vendor-failure-rate"
+
+      - alert: VendorP1FailureRateCritical
+        expr: |
+          (
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                status=~"FAILURE|TIMEOUT|NETWORK_ERROR",
+                vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+              }[5m])
+            )
+            /
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+              }[5m])
+            )
+          ) * 100 > 25
+        for: 1m
+        labels:
+          severity: page
+          tier: P1
+        annotations:
+          summary: "CRITICAL: P1 vendor {{ $labels.vendor_id }} failure rate {{ $value | humanize }}%"
+          description: >
+            {{ $labels.vendor_id }} is failing at {{ $value | humanize }}%.
+            Loan disbursals / payments may be blocked.
+
+      - alert: VendorP1AllCallsFailing
+        expr: |
+          sum by (vendor_id) (
+            rate(vendor_api_calls_total{
+              status="SUCCESS",
+              vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+            }[5m])
+          ) == 0
+          and
+          sum by (vendor_id) (
+            rate(vendor_api_calls_total{
+              vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+            }[5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: page
+          tier: P1
+        annotations:
+          summary: "P1 vendor {{ $labels.vendor_id }} 100% failing — possible outage"
+
+  # ── P1: Latency degradation ─────────────────────────────────────────────────
+  - name: vendor.p1.latency
+    rules:
+      - alert: VendorP1LatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (vendor_id, le) (
+              rate(vendor_api_latency_ms_bucket{
+                vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+              }[5m])
+            )
+          ) > 5
+        for: 3m
+        labels:
+          severity: warning
+          tier: P1
+        annotations:
+          summary: "P1 vendor {{ $labels.vendor_id }} p95 latency {{ $value | humanizeDuration }}"
+          description: >
+            {{ $labels.vendor_id }} p95 latency has exceeded 5s. NFR6 target is p95 < 5s.
+
+      - alert: VendorP1TimeoutSpike
+        expr: |
+          sum by (vendor_id) (
+            rate(vendor_api_calls_total{
+              status="TIMEOUT",
+              vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
+            }[5m])
+          ) > 1
+        for: 2m
+        labels:
+          severity: warning
+          tier: P1
+        annotations:
+          summary: "P1 vendor {{ $labels.vendor_id }} timeout spike"
+
+  # ── P2: Funnel-blocking vendors ─────────────────────────────────────────────
+  - name: vendor.p2.failure_rate
+    rules:
+      - alert: VendorP2FailureRateHigh
+        expr: |
+          (
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                status=~"FAILURE|TIMEOUT|NETWORK_ERROR",
+                vendor_id=~"digitap|signzy"
+              }[10m])
+            )
+            /
+            sum by (vendor_id) (
+              rate(vendor_api_calls_total{
+                vendor_id=~"digitap|signzy"
+              }[10m])
+            )
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          tier: P2
+        annotations:
+          summary: "P2 vendor {{ $labels.vendor_id }} failure rate {{ $value | humanize }}%"
+          description: >
+            {{ $labels.vendor_id }} (funnel-blocking) failure rate is elevated.
+            KYC / bank statement analysis may be degraded.
+
+  # ── Archive pipeline: SQS + Lambda health ───────────────────────────────────
+  - name: vendor.archive.pipeline
+    rules:
+      - alert: VendorArchiveDLQHasMessages
+        expr: |
+          aws_sqs_approximate_number_of_messages_visible_maximum{
+            queue_name=~".*vendor-events-dlq.*"
+          } > 0
+        for: 5m
+        labels:
+          severity: warning
+          tier: infra
+        annotations:
+          summary: "Vendor archive DLQ has {{ $value }} messages"
+          description: >
+            Lambda vendor-archiver is failing to process events.
+            Check Lambda logs: /aws/lambda/vendor-archiver
+
+      - alert: VendorArchiveLambdaErrors
+        expr: |
+          sum(rate(aws_lambda_errors_sum{function_name="vendor-archiver"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          tier: infra
+        annotations:
+          summary: "Lambda vendor-archiver error rate > 0.1/s"
+
+      - alert: VendorArchiveQueueAgeHigh
+        expr: |
+          aws_sqs_approximate_age_of_oldest_message_maximum{
+            queue_name=~".*vendor-events-q$"
+          } > 60
+        for: 2m
+        labels:
+          severity: warning
+          tier: infra
+        annotations:
+          summary: "Vendor events queue oldest message age {{ $value }}s — Lambda falling behind"
+
+  # ── ClickHouse health ────────────────────────────────────────────────────────
+  - name: vendor.clickhouse.health
+    rules:
+      - alert: ClickHouseCPUHigh
+        expr: |
+          aws_ec2_cpuutilization_average{tag_Name=~".*clickhouse.*"} > 80
+        for: 5m
+        labels:
+          severity: warning
+          tier: infra
+        annotations:
+          summary: "ClickHouse EC2 CPU {{ $value }}% — review query load"
+
+      - alert: ClickHouseStatusCheckFailed
+        expr: |
+          aws_ec2_status_check_failed_maximum{tag_Name=~".*clickhouse.*"} > 0
+        for: 2m
+        labels:
+          severity: critical
+          tier: infra
+        annotations:
+          summary: "ClickHouse EC2 status check failed — instance health issue"
+
+  # ── Compliance / security ────────────────────────────────────────────────────
+  - name: vendor.compliance
+    rules:
+      - alert: ArchiveLegalHoldRemoved
+        expr: |
+          vendor_archive_legal_hold_removal_count_sum > 0
+        for: 0m
+        labels:
+          severity: critical
+          tier: compliance
+        annotations:
+          summary: "COMPLIANCE: Legal Hold removed on archive object"
+          description: >
+            An S3 Legal Hold has been removed on the vendor archive bucket.
+            This requires immediate compliance officer review. Check CloudTrail logs.
+          runbook_url: "https://wiki.internal/runbooks/vendor-archive/legal-hold-removal"
+
+      - alert: ArchiveGetObjectAnomaly
+        expr: |
+          vendor_archive_getobject_count_sum > 50
+        for: 0m
+        labels:
+          severity: warning
+          tier: compliance
+        annotations:
+          summary: "Unusual GetObject rate on vendor archive: {{ $value }} reads in 5m"
+          description: >
+            An unusually high read rate on the vendor archive S3 bucket was detected.
+            Verify this is expected audit/review activity.

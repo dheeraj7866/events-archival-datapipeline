@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Environment files
+# Secret runtime file written by Jenkins on the host (salts + SQS URL) — never commit.
+# .env.dev / .env.prod are non-secret config and ARE tracked.
+.env.secrets
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Graph / tooling caches
+.code-review-graph/
+
+# Misc
+.eslintcache
+.prettierignore

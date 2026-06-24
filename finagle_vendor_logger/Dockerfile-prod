@@ -1,0 +1,30 @@
+# finagle-vendor-logger — PROD image (ap-south-1)
+# Mirrors the dev Dockerfile build, but NODE_ENV=prod. Runtime secrets/config
+# come from .env.prod + .env.secrets (docker-compose.prod.yml env_file), NOT baked
+# into the image.
+FROM public.ecr.aws/docker/library/node:24-slim
+
+WORKDIR /usr/src/app
+
+# Install dependencies first to leverage Docker layer cache.
+# NOTE: the NestJS runtime (@nestjs/*, rxjs, reflect-metadata) lives in
+# devDependencies because this package is primarily a library, so we install
+# ALL dependencies — a prod-only install would break the runnable service.
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+COPY . .
+
+# The library build (npm run build) excludes main.ts / app.module.ts.
+# Build the deployable service with the app tsconfig so dist/main.js is emitted.
+RUN npx tsc -p tsconfig.app.json
+
+RUN npm install -g pm2
+
+# NODE_ENV is also set via .env.prod at runtime; this is the image default.
+ENV NODE_ENV=prod \
+    PORT=3013
+
+EXPOSE 3013
+
+CMD ["pm2-runtime", "start", "dist/main.js", "--name", "vendor-logger"]
