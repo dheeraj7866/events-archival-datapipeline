@@ -46,11 +46,10 @@ resource "aws_sns_topic" "alerts" {
   tags              = local.common_tags
 }
 
-resource "aws_sns_topic_subscription" "slack" {
-  count     = can(regex("^https://", var.slack_webhook_url)) ? 1 : 0
+resource "aws_sns_topic_subscription" "dheeraj_email" {
   topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "https"
-  endpoint  = var.slack_webhook_url
+  protocol  = "email"
+  endpoint  = "dheerajkr7866@gmail.com"
 }
 
 # ── VPC ───────────────────────────────────────────────────────────────────────
@@ -74,9 +73,7 @@ module "kms" {
   name_prefix = local.name_prefix
   tags        = local.common_tags
 
-  archiver_writer_role_arn    = module.iam.archiver_writer_role_arn
-  audit_reader_role_arn       = module.iam.audit_reader_role_arn
-  compliance_officer_role_arn = module.iam.compliance_officer_role_arn
+  archiver_writer_role_arn = module.iam.archiver_writer_role_arn
 }
 
 # ── IAM ───────────────────────────────────────────────────────────────────────
@@ -94,8 +91,6 @@ module "iam" {
     aws_secretsmanager_secret.mobile_hash_salt.arn,
     aws_secretsmanager_secret.aadhaar_hash_salt.arn,
   ]
-
-  create_scp = false
 }
 
 # ── Hash-salt secrets for vendor-logger (read by vendor-logger-svc) ──
@@ -287,6 +282,4 @@ output "aadhaar_hash_salt_secret_arn" { value = aws_secretsmanager_secret.aadhaa
 output "clickhouse_private_ip" { value = module.clickhouse.private_ip }
 output "clickhouse_sg_id" { value = module.clickhouse.security_group_id }
 # output "codeartifact_npm_endpoint" { value = module.codeartifact.npm_endpoint }
-output "compliance_officer_role_arn" { value = module.iam.compliance_officer_role_arn }
-output "audit_reader_role_arn" { value = module.iam.audit_reader_role_arn }
 output "kms_key_arn" { value = module.kms.key_arn }

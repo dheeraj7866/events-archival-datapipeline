@@ -131,8 +131,4 @@ variable "lambda_reserved_concurrency" {
 # }
 #
 # ── Alerting ──────────────────────────────────────────────────────────────────
-variable "slack_webhook_url" {
-  description = "Slack incoming webhook URL for SNS alert subscription"
-  type        = string
-  sensitive   = true
-}
+# Slack alert delivery has been removed in staging. Notifications are sent via email.

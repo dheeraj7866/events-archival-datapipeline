@@ -29,8 +29,8 @@ cicd_role_arns = [
 s3_bucket_name = "vendor-archive-staging-aps2"
 
 # ── ClickHouse ────────────────────────────────────────────────────────────────
-clickhouse_instance_type  = "r6i.large"
-clickhouse_data_volume_gb = 100
+clickhouse_instance_type  = "t2.small"
+clickhouse_data_volume_gb = 5
 clickhouse_version        = "24.6.2.17"
 clickhouse_port           = 8123 # HTTP interface — @clickhouse/client is HTTP, not native 9000
 clickhouse_database       = "vendor_archive"
@@ -50,5 +50,4 @@ lambda_reserved_concurrency = 10
 # codeartifact_repo   = "vendor-logger-npm"
 #
 # ── Alerting ──────────────────────────────────────────────────────────────────
-# Set via env var: export TF_VAR_slack_webhook_url="https://hooks.slack.com/..."
-slack_webhook_url = "REPLACE_OR_SET_VIA_TF_VAR_slack_webhook_url"
+# Slack alert delivery has been removed for staging.
