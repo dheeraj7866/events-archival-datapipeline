@@ -320,7 +320,7 @@ resource "aws_organizations_policy_attachment" "deny_legal_hold_lift" {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# vendor-logger-svc — role for the producer service running @finagle/vendor-logger.
+# vendor-logger-svc — role for the producer service running vendor-logger.
 # Can: SQS SendMessage (main queue), KMS GenerateDataKey+Decrypt (queue is SSE-KMS —
 #      producers need both), SecretsManager GetSecretValue (the two hash-salt secrets).
 # Assumed by the service's compute (ECS task / EC2). KMS works via the CMK's

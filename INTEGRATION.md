@@ -1,4 +1,4 @@
-# Integration — wiring `@finagle/vendor-logger` into the API services
+# Integration — wiring `vendor-logger` into the API services
 
 **Status:** staging pipeline GREEN (e2e verified 2026-05-31). This is the actual goal the
 infra exists to serve. See [CONVENTIONS.md](CONVENTIONS.md) for the contract, [STATUS.md](STATUS.md)
@@ -16,7 +16,7 @@ Roll out **one low-volume endpoint first**, confirm it lands in ClickHouse + S3,
 identity-api / los-api / payment-api
       │  vendorHttp.call(payload, fn, opts)     ← the only code change per call site
       ▼
-  @finagle/vendor-logger  → snake_case wire → SQS → Lambda → S3 (raw) + ClickHouse (redacted)
+  vendor-logger  → snake_case wire → SQS → Lambda → S3 (raw) + ClickHouse (redacted)
 ```
 
 ## 2. Host wiring (per service)
@@ -100,7 +100,7 @@ Adjacent fixes from the same effort:
 | Symptom | Fix — where | Type |
 |---|---|---|
 | `user_data` > 16 KB on apply | `clickhouse/main.tf` — `user_data_base64` (not double-encoded `user_data`) + `ignore_changes=[user_data_base64]` | code (TF) |
-| library `npm run build` emitted no JS | `finagle_vendor_logger/tsconfig.build.json` — add `"include": ["src/**/*"]` | code |
+| library `npm run build` emitted no JS | `vendor_logger/tsconfig.build.json` — add `"include": ["src/**/*"]` | code |
 | Lambda zip bundles devDeps (21 MB) | `npm ci --omit=dev` before zip (and `@aws-sdk/*` is in the runtime) | **follow-up — not yet fixed** |
 
 ### The meta-lesson

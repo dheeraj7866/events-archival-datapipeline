@@ -1,6 +1,6 @@
 /**
  * ─── SHARED CONTRACT — DO NOT EDIT FREEHAND ──────────────────────────────────
- * Mirror of @finagle/vendor-logger `src/types/vendor-event.wire.ts`.
+ * Mirror of vendor-logger `src/types/vendor-event.wire.ts`.
  * This is the snake_case wire shape the library puts onto SQS (CONVENTIONS.md §1) —
  * 1:1 with the ClickHouse columns the producer owns. Lambda-added columns
  * (ingested_at, s3_*_key, aadhaar_last4_encrypted) are NOT on the wire.

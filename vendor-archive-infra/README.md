@@ -1,9 +1,9 @@
 # Vendor Archive — Infrastructure README
 
 **Project:** Vendor API Archive & Real-Time Failure Monitoring  
-**Stack:** Tez Credit / Finagle · NestJS lending platform  
+**Stack:** Tez Credit / Vendor · NestJS lending platform  
 **Region:** `ap-south-2` (Hyderabad, India)  
-**Terraform state:** S3 bucket `finagle-tf-state-staging` · lock via `use_lockfile`
+**Terraform state:** S3 bucket `tf-state-staging` · lock via `use_lockfile`
 
 ---
 
@@ -26,7 +26,7 @@
 ```
 NestJS Services (identity-api · los-api · payment-api)
          │
-         │  @finagle/vendor-logger  (sync, < 1ms overhead)
+         │  vendor-logger  (sync, < 1ms overhead)
          │
          ▼
   ┌─────────────┐     ┌──────────────────────────────┐
@@ -297,7 +297,7 @@ clickhouse-client --query "ALTER USER grafana_reader IDENTIFIED BY 'your-grafana
 
 ### Terraform State
 
-- **Bucket:** `finagle-tf-state-staging` (ap-south-2)  
+- **Bucket:** `tf-state-staging` (ap-south-2)  
 - **Key:** `vendor-archive/terraform.tfstate`  
 - **Lock:** S3 native lockfile (`use_lockfile = true`)  
 - Access: whoever can write to the state bucket
@@ -642,7 +642,7 @@ These must be closed before production cutover:
 
 ## 9. Vendor-Logger Producer Host (prod · ap-south-1)
 
-The **producer** side (`@finagle/vendor-logger`, the NestJS service that captures vendor
+The **producer** side (`vendor-logger`, the NestJS service that captures vendor
 API events and `SendMessage`s them to SQS) runs on a small dedicated EC2 in **prod**,
 managed by `module.vendor_logger`. It is the public entry point for `/log`.
 
@@ -652,7 +652,7 @@ managed by `module.vendor_logger`. It is the public entry point for `/log`.
 | Instance | `t3.small`, Ubuntu 22.04, 20 GB gp3 root, **public subnet** |
 | Stable IP | **Elastic IP `13.207.231.147`** (survives instance replacement) |
 | Public hostname | **`logger.tezcredit.com`** → A record → the EIP |
-| App | Docker container, `9013 → 3013`, deployed by `finagle_vendor_logger/Jenkinsfile-prod` |
+| App | Docker container, `9013 → 3013`, deployed by `vendor_logger/Jenkinsfile-prod` |
 | IAM | reuses `vendor-logger-svc` role: SQS send + KMS + salt-secret read + ECR pull + SSM |
 | Secrets at deploy | salts pulled from Secrets Manager **on the host**; SQS URL from a Jenkins credential |
 
@@ -669,7 +669,7 @@ managed by `module.vendor_logger`. It is the public entry point for `/log`.
 
 `logger.tezcredit.com` is fronted by **nginx**, which terminates TLS and proxies to the
 local container on `127.0.0.1:9013`. The app itself is plain HTTP and is never exposed
-directly. The proxy config lives in `finagle_vendor_logger/deploy/nginx/logger.tezcredit.com.conf`
+directly. The proxy config lives in `vendor_logger/deploy/nginx/logger.tezcredit.com.conf`
 and is **pre-provisioned by the module's `user_data`** (HTTP-only at boot, so nginx starts
 without a cert), gated on `vendor_logger_domain_name`.
 

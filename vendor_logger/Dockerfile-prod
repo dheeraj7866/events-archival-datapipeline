@@ -1,4 +1,4 @@
-# finagle-vendor-logger — PROD image (ap-south-1)
+# vendor-logger — PROD image (ap-south-1)
 # Mirrors the dev Dockerfile build, but NODE_ENV=prod. Runtime secrets/config
 # come from .env.prod + .env.secrets (docker-compose.prod.yml env_file), NOT baked
 # into the image.

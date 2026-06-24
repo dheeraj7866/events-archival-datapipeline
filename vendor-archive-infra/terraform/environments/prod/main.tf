@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "finagle-tf-state-prod"
+    bucket       = "tf-state-prod"
     key          = "vendor-archive/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true
@@ -116,7 +116,7 @@ module "iam" {
   scp_target_id = var.scp_target_id
 }
 
-# ── Hash-salt secrets for @finagle/vendor-logger (read by vendor-logger-svc) ──
+# ── Hash-salt secrets for vendor-logger (read by vendor-logger-svc) ──
 resource "random_password" "mobile_hash_salt" {
   length  = 64
   special = false
@@ -128,7 +128,7 @@ resource "random_password" "aadhaar_hash_salt" {
 
 resource "aws_secretsmanager_secret" "mobile_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/mobile-hash-salt"
-  description             = "HMAC salt for mobile hashing (@finagle/vendor-logger)"
+  description             = "HMAC salt for mobile hashing (vendor-logger)"
   kms_key_id              = module.kms.key_arn
   recovery_window_in_days = 30
   tags                    = local.common_tags
@@ -140,7 +140,7 @@ resource "aws_secretsmanager_secret_version" "mobile_hash_salt" {
 
 resource "aws_secretsmanager_secret" "aadhaar_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/aadhaar-hash-salt"
-  description             = "HMAC salt for Aadhaar last-4 hashing (@finagle/vendor-logger)"
+  description             = "HMAC salt for Aadhaar last-4 hashing (vendor-logger)"
   kms_key_id              = module.kms.key_arn
   recovery_window_in_days = 30
   tags                    = local.common_tags
@@ -264,7 +264,7 @@ module "cloudtrail" {
   alert_sns_arns            = [aws_sns_topic.alerts.arn]
 }
 
-# ── vendor-logger producer host (finagle_vendor_logger) ──────────────────────
+# ── vendor-logger producer host (vendor_logger) ──────────────────────
 # Single small EC2 that runs the producer service (docker compose, deployed by
 # Jenkinsfile-prod). Reuses the iam module's vendor-logger-svc role for the
 # instance profile (SQS send + KMS + salt-secret read).

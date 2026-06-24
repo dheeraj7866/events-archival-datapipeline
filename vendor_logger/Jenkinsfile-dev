@@ -4,11 +4,11 @@ pipeline {
     environment {
         AWS_REGION  = "ap-south-2"
         ACCOUNT_ID  = "761520024839"
-        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tezcredit/finagle_vendor_logger"
+        ECR_REPO    = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/tezcredit/vendor_logger"
 
         EC2_HOST    = "98.130.99.33"
         EC2_USER    = "ubuntu"
-        DEPLOY_DIR  = "/home/ubuntu/finagle_vendor_logger"
+        DEPLOY_DIR  = "/home/ubuntu/vendor_logger"
 
         // SQS URL lives here (non-secret) instead of .env.dev — written to
         // .env.secrets on the host at deploy time.
@@ -28,7 +28,7 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: "*/${params.GIT_BRANCH}"]],
                     userRemoteConfigs: [[
-                        url: 'git@github.com:TezCredit/finagle_vendor_logger.git',
+                        url: 'git@github.com:TezCredit/vendor_logger.git',
                         credentialsId: 'github-ssh-key'
                     ]]
                 ])
@@ -78,7 +78,7 @@ printf 'VENDOR_ARCHIVE_SQS_URL=%s\\nMOBILE_HASH_SALT=%s\\nAADHAAR_HASH_SALT=%s\\
 ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
 cd ${DEPLOY_DIR}
 cp docker-compose-dev.yml docker-compose-dev.yml.bak
-sed -i "/finagle-vendor-logger:/,/^  [a-z]/{s|image:.*|image: ${ECR_REPO}:${IMAGE_TAG}|}" docker-compose-dev.yml
+sed -i "/vendor-logger:/,/^  [a-z]/{s|image:.*|image: ${ECR_REPO}:${IMAGE_TAG}|}" docker-compose-dev.yml
 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 docker compose -f docker-compose-dev.yml pull
 docker compose -f docker-compose-dev.yml up -d

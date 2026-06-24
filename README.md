@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This repository implements a vendor API archival and monitoring pipeline for the `@finagle/vendor-logger` system. It includes:
+This repository implements a vendor API archival and monitoring pipeline for the `vendor-logger` system. It includes:
 
 - `vendor_logger`: a NestJS shared library that captures vendor API calls, performs PII-safe event logging, and publishes events to SQS.
 - `vendor-archive-infra`: Terraform infrastructure for staging/prod, including VPC, SQS, Lambda archiver, ClickHouse, S3 archive, KMS, IAM, and monitoring.
@@ -19,7 +19,7 @@ The pipeline is designed to provide:
 
 ### High-level components
 
-- `@finagle/vendor-logger` library
+- `vendor-logger` library
   - Instrumented by borrower-facing NestJS services
   - Captures vendor API payloads and metadata
   - Preserves fail-open behavior for vendor integration
@@ -44,7 +44,7 @@ The pipeline is designed to provide:
                +-------------+---------------+
                              |
          in-process          | Vendor API call and event
-         ring buffer         | capture via @finagle/vendor-logger
+         ring buffer         | capture via vendor-logger
                              |
                              v
                     +----------------+

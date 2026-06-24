@@ -320,7 +320,7 @@ make_table(doc,
 doc.add_paragraph()
 footer_para = doc.add_paragraph()
 footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-fr = footer_para.add_run("Finagle / Tez Credit  ·  Vendor Archive  ·  Schema v1  ·  2026-06-01")
+fr = footer_para.add_run("Vendor / Tez Credit  ·  Vendor Archive  ·  Schema v1  ·  2026-06-01")
 fr.font.size = Pt(8)
 fr.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 

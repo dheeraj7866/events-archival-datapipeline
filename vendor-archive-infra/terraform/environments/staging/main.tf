@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "finagle-tf-state-staging"
+    bucket       = "tf-state-staging"
     key          = "vendor-archive/terraform.tfstate"
     region       = "ap-south-2"
     encrypt      = true
@@ -98,7 +98,7 @@ module "iam" {
   create_scp = false
 }
 
-# ── Hash-salt secrets for @finagle/vendor-logger (read by vendor-logger-svc) ──
+# ── Hash-salt secrets for vendor-logger (read by vendor-logger-svc) ──
 resource "random_password" "mobile_hash_salt" {
   length  = 64
   special = false
@@ -110,7 +110,7 @@ resource "random_password" "aadhaar_hash_salt" {
 
 resource "aws_secretsmanager_secret" "mobile_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/mobile-hash-salt"
-  description             = "HMAC salt for mobile hashing (@finagle/vendor-logger)"
+  description             = "HMAC salt for mobile hashing (vendor-logger)"
   kms_key_id              = module.kms.key_arn
   recovery_window_in_days = 7
   tags                    = local.common_tags
@@ -122,7 +122,7 @@ resource "aws_secretsmanager_secret_version" "mobile_hash_salt" {
 
 resource "aws_secretsmanager_secret" "aadhaar_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/aadhaar-hash-salt"
-  description             = "HMAC salt for Aadhaar last-4 hashing (@finagle/vendor-logger)"
+  description             = "HMAC salt for Aadhaar last-4 hashing (vendor-logger)"
   kms_key_id              = module.kms.key_arn
   recovery_window_in_days = 7
   tags                    = local.common_tags

@@ -1,11 +1,11 @@
 version: "3.8"
 
 services:
-  finagle-vendor-logger:
-    image: 761520024839.dkr.ecr.ap-south-1.amazonaws.com/tezcredit/finagle_vendor_logger:latest
-    container_name: finagle-vendor-logger
+  vendor-logger:
+    image: 761520024839.dkr.ecr.ap-south-1.amazonaws.com/tezcredit/vendor_logger:latest
+    container_name: vendor-logger
     labels:
-      - "service=finagle-vendor-logger"
+      - "service=vendor-logger"
       - "env=prod"
     ports:
       - "9013:3013"

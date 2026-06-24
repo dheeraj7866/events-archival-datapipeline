@@ -121,7 +121,7 @@ variable "lambda_reserved_concurrency" {
 # variable "codeartifact_domain" {
 #   description = "CodeArtifact domain name"
 #   type        = string
-#   default     = "finagle"
+#   default     = "vendor"
 # }
 #
 # variable "codeartifact_repo" {

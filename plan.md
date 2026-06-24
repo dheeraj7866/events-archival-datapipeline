@@ -1,6 +1,6 @@
 # Integration Completion Plan — Vendor API Archiving
 
-**Goal:** Make `@finagle/vendor-logger` → SQS → Lambda → S3 + ClickHouse → Grafana work end-to-end, with tests,
+**Goal:** Make `vendor-logger` → SQS → Lambda → S3 + ClickHouse → Grafana work end-to-end, with tests,
 so we can start adding the middleware to the API codebases (`identity-api`, `los-api`, `payment-api`).
 
 **Scope this iteration:** **Code + contracts + tests only.** Terraform `apply`, secret values, and ClickHouse
@@ -21,7 +21,7 @@ Legend: ☐ todo · ◐ in progress · ☑ done · ⏸ infra-later/blocked
 ## Phase 0 — Foundations (no behavior change) ✅
 - ☑ Author [CONVENTIONS.md](CONVENTIONS.md) (canonical contract)
 - ☑ Author this plan
-- ☑ Mark `finagle_vendor_logger/clickhouse/001_vendor_api_events.sql` as `-- DEPRECATED` (point to canonical)
+- ☑ Mark `vendor_logger/clickhouse/001_vendor_api_events.sql` as `-- DEPRECATED` (point to canonical)
 - ☑ Set up the Lambda shared-contract path (§2.3): vendored mirror `lambda/vendor-archiver/src/contract/`
   (`VendorApiEvent` + `PayloadRedactor`) with header comment. *(Target: CodeArtifact import, D5. Build-sync step still TODO — see follow-ups.)*
 

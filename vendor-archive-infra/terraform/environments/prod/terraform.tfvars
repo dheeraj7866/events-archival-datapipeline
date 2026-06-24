@@ -61,7 +61,7 @@ vendor_logger_allocate_eip        = true                       # stable Elastic 
 vendor_logger_allowed_ssh_cidrs   = ["40.192.17.235/32"]       # Jenkins host (SSH only)
 vendor_logger_allowed_web_cidrs   = ["0.0.0.0/0"]              # public 80/443 (nginx -> logger.tezcredit.com; 80 required for Let's Encrypt)
 vendor_logger_domain_name         = "logger.tezcredit.com"     # user_data pre-installs nginx reverse proxy (run certbot once for TLS)
-vendor_logger_key_pair_name       = "finagle-dev-test-dheeraj" # matches Jenkins' ec2-ssh-key (imported into ap-south-1)
+vendor_logger_key_pair_name       = "dev-test-dheeraj" # matches Jenkins' ec2-ssh-key (imported into ap-south-1)
 
 # ── Lambda ────────────────────────────────────────────────────────────────────
 lambda_zip_path             = "../../../lambda/vendor-archiver/vendor-archiver.zip"
@@ -72,7 +72,7 @@ cloudtrail_log_bucket_name     = "vendor-archive-prod-cloudtrail-aps1"
 cloudtrail_getobject_threshold = 50
 
 # ── CodeArtifact ──────────────────────────────────────────────────────────────
-codeartifact_domain = "finagle"
+codeartifact_domain = "vendor"
 codeartifact_repo   = "vendor-logger-npm"
 
 # ── Alerting ──────────────────────────────────────────────────────────────────

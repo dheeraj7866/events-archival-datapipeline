@@ -1,4 +1,4 @@
-# @finagle/vendor-logger — Project Context
+# vendor-logger — Project Context
 
 ## What this is
 
@@ -58,7 +58,7 @@ REPAID | OVERDUE | CLOSED | WRITTEN_OFF
 
 ```typescript
 // app.module.ts
-import { VendorLoggerModule } from '@finagle/vendor-logger';
+import { VendorLoggerModule } from 'vendor-logger';
 
 @Module({
   imports: [

@@ -125,7 +125,7 @@ variable "cloudtrail_getobject_threshold" {
 # ── CodeArtifact ──────────────────────────────────────────────────────────────
 variable "codeartifact_domain" {
   type    = string
-  default = "finagle"
+  default = "vendor"
 }
 
 variable "codeartifact_repo" {
@@ -140,7 +140,7 @@ variable "slack_webhook_url" {
   sensitive   = true
 }
 
-# ── vendor-logger producer host (finagle_vendor_logger) ───────────────────────
+# ── vendor-logger producer host (vendor_logger) ───────────────────────
 variable "vendor_logger_instance_type" {
   description = "EC2 instance type for the vendor-logger producer (small by design)."
   type        = string
@@ -168,7 +168,7 @@ variable "vendor_logger_allocate_eip" {
 variable "vendor_logger_ecr_repository_arn" {
   description = "ECR repo ARN the image is pulled from (scopes the host's pull policy)."
   type        = string
-  default     = "arn:aws:ecr:ap-south-1:761520024839:repository/tezcredit/finagle_vendor_logger"
+  default     = "arn:aws:ecr:ap-south-1:761520024839:repository/tezcredit/vendor_logger"
 }
 
 variable "vendor_logger_allowed_ssh_cidrs" {

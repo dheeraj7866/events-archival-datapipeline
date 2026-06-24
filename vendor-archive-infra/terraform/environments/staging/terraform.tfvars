@@ -46,7 +46,7 @@ lambda_reserved_concurrency = 10
 # cloudtrail_getobject_threshold = 20
 #
 # ── CodeArtifact ──────────────────────────────────────────────────────────────────
-# codeartifact_domain = "finagle"
+# codeartifact_domain = "vendor"
 # codeartifact_repo   = "vendor-logger-npm"
 #
 # ── Alerting ──────────────────────────────────────────────────────────────────

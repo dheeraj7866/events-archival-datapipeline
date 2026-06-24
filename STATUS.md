@@ -13,7 +13,7 @@ See [CONVENTIONS.md](CONVENTIONS.md) for the contract and [plan.md](plan.md) for
 
 ```mermaid
 flowchart LR
-    subgraph PROD["Producers — @finagle/vendor-logger (NestJS)"]
+    subgraph PROD["Producers — vendor-logger (NestJS)"]
         direction TB
         HP["VendorHttpService.call()<br/>build camelCase VendorApiEvent<br/>+ HMAC/mask PII"]:::done
         RB["RingBuffer push()<br/>fail-open, &lt;1ms"]:::done

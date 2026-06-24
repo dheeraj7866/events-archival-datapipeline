@@ -1,5 +1,5 @@
 {
-  "name": "@finagle/vendor-logger",
+  "name": "vendor-logger",
   "version": "0.2.0",
   "description": "NestJS vendor API logger — ring buffer → SQS → ClickHouse + S3 compliance archive",
   "main": "dist/index.js",

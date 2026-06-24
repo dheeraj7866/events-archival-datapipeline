@@ -1,8 +1,8 @@
 data "aws_region" "current" {}
 
 # ──────────────────────────────────────────────────────────────────────────────
-# finagle-vendor-logger producer host — single small EC2 (prod).
-# Stateless Node service (the @finagle/vendor-logger app): captures vendor API
+# vendor-logger producer host — single small EC2 (prod).
+# Stateless Node service (the vendor-logger app): captures vendor API
 # events and SendMessage → SQS. No local data, so no data EBS / snapshots —
 # just a small root volume and the Docker image. Deployed by Jenkinsfile-prod
 # (docker compose -f docker-compose.prod.yml over SSH).

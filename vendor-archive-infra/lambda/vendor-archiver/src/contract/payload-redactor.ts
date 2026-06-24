@@ -1,6 +1,6 @@
 /**
  * ─── SHARED CONTRACT — DO NOT EDIT FREEHAND ──────────────────────────────────
- * Mirror of @finagle/vendor-logger `src/pii/payload-redactor.ts`.
+ * Mirror of vendor-logger `src/pii/payload-redactor.ts`.
  * Applied by the Lambda to req/resp payloads BEFORE the ClickHouse INSERT so the
  * queryable tier holds no plaintext PII. S3 keeps the raw copy (CONVENTIONS.md §6).
  * The library is the source of truth; keep this in sync (D5 / CONVENTIONS.md §2.3).

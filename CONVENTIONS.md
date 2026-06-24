@@ -1,7 +1,7 @@
 # Vendor API Archiving — Integration Conventions & Contract
 
 **Status:** Authoritative · **Updated:** 2026-05-29 · **Region:** `ap-south-2` (Hyderabad)
-**Scope:** Binds `@finagle/vendor-logger` (producer library) **and** `vendor-archive` (Lambda + infra).
+**Scope:** Binds `vendor-logger` (producer library) **and** `vendor-archive` (Lambda + infra).
 
 > This file is the single source of truth for the cross-repo contract. When code, `ARCHITECTURE.html`,
 > `HARDENING_PLAN.md`, or `README.md` disagree, **this file wins**. Update this file *first*, then the code.
@@ -28,7 +28,7 @@ metrics, and tests use it), and maps to the wire shape **at the SQS boundary onl
 switched from camelCase-on-the-wire while there were still **zero live producers/consumers** — the cheapest moment
 to make the wire match the table.
 
-Source of truth for the wire shape: [`finagle_vendor_logger/src/types/vendor-event.wire.ts`](finagle_vendor_logger/src/types/vendor-event.wire.ts) → `interface VendorApiEventWire` + `toWireEvent()`. The internal camelCase type stays in [`vendor-event.types.ts`](finagle_vendor_logger/src/types/vendor-event.types.ts).
+Source of truth for the wire shape: [`vendor_logger/src/types/vendor-event.wire.ts`](vendor_logger/src/types/vendor-event.wire.ts) → `interface VendorApiEventWire` + `toWireEvent()`. The internal camelCase type stays in [`vendor-event.types.ts`](vendor_logger/src/types/vendor-event.types.ts).
 
 | Field (snake_case wire) | Type | Nullable on wire | Notes |
 |---|---|---|---|
@@ -96,7 +96,7 @@ columns, redact payloads, and coerce types.
 ### 2.3 Shared types
 The Lambda must use the **same** wire type (`VendorApiEventWire`) and the **same** `PayloadRedactor` as the
 library — no hand-redrawn copies that can drift.
-- **Target:** publish `@finagle/vendor-logger` to CodeArtifact (D5) and `import { VendorApiEventWire, PayloadRedactor } from '@finagle/vendor-logger'`.
+- **Target:** publish `vendor-logger` to CodeArtifact (D5) and `import { VendorApiEventWire, PayloadRedactor } from 'vendor-logger'`.
 - **Interim (until D5/CodeArtifact in ap-south-2):** a single vendored mirror under `lambda/vendor-archiver/src/contract/` copied by a build step from the library, with a header comment pointing here. **One** copy, build-synced — not a freehand rewrite.
 
 ---
@@ -105,7 +105,7 @@ library — no hand-redrawn copies that can drift.
 
 **Decision (D-SCHEMA):** There is exactly **one** schema, in the infra repo:
 [`vendor-archive/clickhouse/init.sql`](vendor-archive/clickhouse/init.sql).
-The library-repo DDL [`finagle_vendor_logger/clickhouse/001_vendor_api_events.sql`](finagle_vendor_logger/clickhouse/001_vendor_api_events.sql)
+The library-repo DDL [`vendor_logger/clickhouse/001_vendor_api_events.sql`](vendor_logger/clickhouse/001_vendor_api_events.sql)
 is **deprecated** — mark it `-- DEPRECATED: see vendor-archive/clickhouse/init.sql` and stop editing it.
 
 Required changes to the canonical schema (tracked in plan.md, applied infra-later):

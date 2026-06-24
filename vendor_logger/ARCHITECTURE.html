@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>@finagle/vendor-logger — Architecture, Patterns & ClickHouse Connection</title>
+<title>vendor-logger — Architecture, Patterns & ClickHouse Connection</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -80,7 +80,7 @@
 
 <div class="header">
   <div>
-    <h1>@finagle/vendor-logger</h1>
+    <h1>vendor-logger</h1>
     <p style="color:var(--muted);margin-top:4px;font-size:13px">Architecture · Fan-in / Fan-out · Code Review · ClickHouse Connection</p>
   </div>
   <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
@@ -128,7 +128,7 @@
   <text x="160" y="133" fill="#58a6ff" font-size="10" text-anchor="middle">Karza · NSDL · Digitap</text>
   <!-- library badge -->
   <rect x="90" y="143" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
-  <text x="160" y="156" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+  <text x="160" y="156" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">vendor-logger</text>
 
   <!-- los-api box -->
   <rect x="44" y="172" width="232" height="80" rx="7" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
@@ -136,7 +136,7 @@
   <text x="160" y="211" fill="#8b949e" font-size="10" text-anchor="middle">NestJS v10 · BUREAU_BRE / BANK_BRE / REPEAT_BRE</text>
   <text x="160" y="227" fill="#58a6ff" font-size="10" text-anchor="middle">CRIF · Equifax · BSA</text>
   <rect x="90" y="237" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
-  <text x="160" y="250" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+  <text x="160" y="250" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">vendor-logger</text>
 
   <!-- payment-api box -->
   <rect x="44" y="266" width="232" height="80" rx="7" fill="#1e2530" stroke="#30363d" stroke-width="1"/>
@@ -144,7 +144,7 @@
   <text x="160" y="305" fill="#8b949e" font-size="10" text-anchor="middle">NestJS v11 · DISBURSED / REPAID</text>
   <text x="160" y="321" fill="#58a6ff" font-size="10" text-anchor="middle">Easebuzz</text>
   <rect x="90" y="331" width="140" height="18" rx="9" fill="#0d1f38" stroke="#58a6ff" stroke-width="1"/>
-  <text x="160" y="344" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">@finagle/vendor-logger</text>
+  <text x="160" y="344" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle">vendor-logger</text>
 
   <!-- Fan-in label -->
   <text x="160" y="385" fill="#8b949e" font-size="10" text-anchor="middle" font-style="italic">3 producers → 1 queue</text>
@@ -663,7 +663,7 @@ const s3ResponseKey = `vendor_id=${event.vendorId}/event_date=${dateStr}/request
 import { createClient } from '@clickhouse/client';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SQSHandler, SQSRecord } from 'aws-lambda';
-import { VendorApiEvent } from '@finagle/vendor-logger';
+import { VendorApiEvent } from 'vendor-logger';
 import { compress } from '@aws-sdk/util-gzip';
 
 <span style="color:#6a9955">// Cold-start singletons</span>
@@ -790,7 +790,7 @@ export const handler: SQSHandler = async (sqsEvent) => {
     </ul>
   </div>
 </div>
-<p style="margin-top:20px;color:var(--muted);font-size:12px">Generated 2026-05-29 · @finagle/vendor-logger v0.1.0 · 50 tests · build clean</p>
+<p style="margin-top:20px;color:var(--muted);font-size:12px">Generated 2026-05-29 · vendor-logger v0.1.0 · 50 tests · build clean</p>
 </section>
 
 </body>

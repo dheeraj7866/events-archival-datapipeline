@@ -1,4 +1,4 @@
-# @finagle/vendor-logger — Hardening Plan
+# vendor-logger — Hardening Plan
 
 **Owner:** Pratyush Kumar  
 **Updated:** 2026-05-29  

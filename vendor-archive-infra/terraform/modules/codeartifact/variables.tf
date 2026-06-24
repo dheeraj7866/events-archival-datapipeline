@@ -10,11 +10,11 @@ variable "tags" {
 variable "domain_name" {
   description = "CodeArtifact domain name"
   type        = string
-  default     = "finagle"
+  default     = "vendor"
 }
 
 variable "repository_name" {
-  description = "CodeArtifact repository name for @finagle/vendor-logger"
+  description = "CodeArtifact repository name for vendor-logger"
   type        = string
   default     = "vendor-logger-npm"
 }

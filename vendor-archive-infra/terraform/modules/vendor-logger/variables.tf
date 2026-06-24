@@ -106,7 +106,7 @@ variable "ecr_repository_arn" {
 variable "deploy_dir" {
   description = "Directory on the host where Jenkins places docker-compose.prod.yml/.env.prod and writes .env.secrets."
   type        = string
-  default     = "/home/ubuntu/finagle_vendor_logger"
+  default     = "/home/ubuntu/vendor_logger"
 }
 
 variable "domain_name" {
