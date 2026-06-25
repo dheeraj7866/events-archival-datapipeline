@@ -64,7 +64,8 @@ resource "aws_lambda_function" "archiver" {
   # DLQ for failed messages is configured on the SQS queue via redrive_policy,
   # not on the Lambda function (which only applies to async invocations).
 
-  reserved_concurrent_executions = var.reserved_concurrency
+  # reserved_concurrent_executions intentionally omitted to avoid account-level
+  # conflicts; use event source mapping `scaling_config` to cap concurrency.
 
   depends_on = [aws_cloudwatch_log_group.archiver]
 

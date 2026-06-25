@@ -13,10 +13,6 @@ output "audit_reader_role_arn" {
   value       = length(aws_iam_role.audit_reader) > 0 ? aws_iam_role.audit_reader[0].arn : ""
 }
 
-output "compliance_officer_role_arn" {
-  description = "ARN of the compliance-officer IAM role (D7: only role that can lift Legal Hold)"
-  value       = length(aws_iam_role.compliance_officer) > 0 ? aws_iam_role.compliance_officer[0].arn : ""
-}
 
 output "vendor_logger_svc_role_arn" {
   description = "ARN of the vendor-logger-svc role (producer: SQS send + hash salts + KMS)"

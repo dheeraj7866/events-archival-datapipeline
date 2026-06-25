@@ -106,7 +106,7 @@ resource "aws_ebs_volume" "clickhouse_data" {
   availability_zone = "${data.aws_region.current.name}a"
   size              = var.data_volume_size_gb
   type              = "gp3"
-  iops              = 6000
+  iops              = 500
   throughput        = 250
   encrypted  = true
   # Use CMK when provided, otherwise fall back to AWS-managed EBS key

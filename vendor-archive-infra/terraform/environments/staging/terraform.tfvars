@@ -26,11 +26,11 @@ cicd_role_arns = [
 ]
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
-s3_bucket_name = "vendor-archive-staging-aps2"
+s3_bucket_name = "vendor-archive-staging-aps2-own"
 
 # ── ClickHouse ────────────────────────────────────────────────────────────────
 clickhouse_instance_type  = "t2.small"
-clickhouse_data_volume_gb = 5
+clickhouse_data_volume_gb = 10
 clickhouse_version        = "24.6.2.17"
 clickhouse_port           = 8123 # HTTP interface — @clickhouse/client is HTTP, not native 9000
 clickhouse_database       = "vendor_archive"

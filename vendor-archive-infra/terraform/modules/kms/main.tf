@@ -96,42 +96,6 @@ data "aws_iam_policy_document" "kms_key_policy" {
     resources = ["*"]
   }
 
-  # ── audit-reader: decrypt for audit access ──
-  dynamic "statement" {
-    for_each = var.audit_reader_role_arn != "" ? [1] : []
-    content {
-      sid    = "AuditReaderDecrypt"
-      effect = "Allow"
-      principals {
-        type        = "AWS"
-        identifiers = [var.audit_reader_role_arn]
-      }
-      actions = [
-        "kms:Decrypt",
-        "kms:DescribeKey",
-      ]
-      resources = ["*"]
-    }
-  }
-
-  # ── compliance-officer: decrypt for Legal Hold review ──
-  dynamic "statement" {
-    for_each = var.compliance_officer_role_arn != "" ? [1] : []
-    content {
-      sid    = "ComplianceOfficerDecrypt"
-      effect = "Allow"
-      principals {
-        type        = "AWS"
-        identifiers = [var.compliance_officer_role_arn]
-      }
-      actions = [
-        "kms:Decrypt",
-        "kms:DescribeKey",
-      ]
-      resources = ["*"]
-    }
-  }
-
   # ── S3 service: SSE-KMS operations ──
   statement {
     sid    = "S3ServiceSSE"

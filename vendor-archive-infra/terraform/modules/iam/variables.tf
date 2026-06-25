@@ -46,24 +46,6 @@ variable "audit_reader_principal_arns" {
   default     = []
 }
 
-variable "compliance_officer_principal_arns" {
-  description = "IAM user/role ARNs allowed to assume the compliance-officer role (dual-control, D7)"
-  type        = list(string)
-  default     = []
-}
-
-variable "create_scp" {
-  description = "Whether to create the Organizations SCP guardrail for Legal Hold"
-  type        = bool
-  default     = false
-}
-
-variable "scp_target_id" {
-  description = "AWS Organizations account/OU ID to attach the SCP to"
-  type        = string
-  default     = ""
-}
-
 variable "create_lambda_slr" {
   description = "Whether to create the Lambda service-linked role (skip if it already exists)"
   type        = bool

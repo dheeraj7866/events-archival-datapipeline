@@ -75,10 +75,8 @@ module "kms" {
   name_prefix = local.name_prefix
   tags        = local.common_tags
 
-  key_admin_role_arns         = var.key_admin_role_arns
-  archiver_writer_role_arn    = module.iam.archiver_writer_role_arn
-  audit_reader_role_arn       = module.iam.audit_reader_role_arn
-  compliance_officer_role_arn = module.iam.compliance_officer_role_arn
+  key_admin_role_arns      = var.key_admin_role_arns
+  archiver_writer_role_arn = module.iam.archiver_writer_role_arn
 }
 
 # ── SQS ───────────────────────────────────────────────────────────────────────

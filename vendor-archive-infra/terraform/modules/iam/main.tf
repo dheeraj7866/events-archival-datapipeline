@@ -5,8 +5,7 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
 
-  audit_reader_role_exists       = length(var.audit_reader_principal_arns) > 0
-  compliance_officer_role_exists = length(var.compliance_officer_principal_arns) > 0
+  audit_reader_role_exists = length(var.audit_reader_principal_arns) > 0
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -199,124 +198,6 @@ data "aws_iam_policy_document" "audit_reader" {
     ]
     resources = [var.kms_key_arn]
   }
-}
-
-# ──────────────────────────────────────────────────────────────────────────────
-# compliance-officer  - sole role that can lift S3 Legal Hold
-# D7: members identified separately; MFA required; SCP guardrail on this account
-# ──────────────────────────────────────────────────────────────────────────────
-resource "aws_iam_role" "compliance_officer" {
-  count              = local.compliance_officer_role_exists ? 1 : 0
-  name               = "${var.name_prefix}-compliance-officer"
-  assume_role_policy = data.aws_iam_policy_document.compliance_officer_assume[0].json
-
-  tags = var.tags
-}
-
-data "aws_iam_policy_document" "compliance_officer_assume" {
-  count = local.compliance_officer_role_exists ? 1 : 0
-
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "AWS"
-      identifiers = var.compliance_officer_principal_arns
-    }
-    # Dual-control: both MFA and explicit session tag required
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
-  }
-}
-
-resource "aws_iam_role_policy" "compliance_officer_inline" {
-  count  = local.compliance_officer_role_exists ? 1 : 0
-  name   = "compliance-officer-inline"
-  role   = aws_iam_role.compliance_officer[0].id
-  policy = data.aws_iam_policy_document.compliance_officer.json
-}
-
-data "aws_iam_policy_document" "compliance_officer" {
-  # Legal Hold lift - the single dangerous permission, scoped tightly
-  statement {
-    sid    = "LegalHoldLift"
-    effect = "Allow"
-    actions = [
-      "s3:PutObjectLegalHold",
-      "s3:GetObjectLegalHold",
-    ]
-    resources = ["${var.s3_bucket_arn}/*"]
-  }
-
-  # Read access for review
-  statement {
-    sid    = "S3ReadForReview"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:ListBucket",
-    ]
-    resources = [
-      var.s3_bucket_arn,
-      "${var.s3_bucket_arn}/*",
-    ]
-  }
-
-  statement {
-    sid    = "KMSDecryptForReview"
-    effect = "Allow"
-    actions = [
-      "kms:Decrypt",
-      "kms:DescribeKey",
-    ]
-    resources = [var.kms_key_arn]
-  }
-}
-
-# ──────────────────────────────────────────────────────────────────────────────
-# SCP guardrail - denies Legal Hold removal from any role EXCEPT compliance-officer
-# Applied at OU/account level to prevent privilege escalation
-# ──────────────────────────────────────────────────────────────────────────────
-resource "aws_organizations_policy" "deny_legal_hold_lift" {
-  count       = var.create_scp ? 1 : 0
-  name        = "${var.name_prefix}-deny-legal-hold-lift"
-  description = "Prevents any principal except compliance-officer from removing S3 Legal Hold on the vendor archive bucket"
-  type        = "SERVICE_CONTROL_POLICY"
-  content     = data.aws_iam_policy_document.scp_deny_legal_hold.json
-
-  tags = var.tags
-}
-
-data "aws_iam_policy_document" "scp_deny_legal_hold" {
-  statement {
-    sid    = "DenyLegalHoldLiftExceptComplianceOfficer"
-    effect = "Deny"
-    actions = [
-      "s3:PutObjectLegalHold",
-    ]
-    resources = ["${var.s3_bucket_arn}/*"]
-
-    condition {
-      test     = "ArnNotLike"
-      variable = "aws:PrincipalArn"
-      values   = [aws_iam_role.compliance_officer.arn]
-    }
-
-    # Only applies to the archive bucket
-    condition {
-      test     = "StringEquals"
-      variable = "s3:ResourceAccount"
-      values   = [local.account_id]
-    }
-  }
-}
-
-resource "aws_organizations_policy_attachment" "deny_legal_hold_lift" {
-  count     = var.create_scp ? 1 : 0
-  policy_id = aws_organizations_policy.deny_legal_hold_lift[0].id
-  target_id = var.scp_target_id
 }
 
 # ──────────────────────────────────────────────────────────────────────────────

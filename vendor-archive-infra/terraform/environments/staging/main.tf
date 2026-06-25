@@ -13,16 +13,16 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "tf-state-staging"
+    bucket       = "tf-state-staging-events"
     key          = "vendor-archive/terraform.tfstate"
-    region       = "ap-south-2"
+    region       = "ap-south-1"
     encrypt      = true
     use_lockfile = true
   }
 }
 
 provider "aws" {
-  region = "ap-south-2"
+  region = "ap-south-1"
   default_tags {
     tags = local.common_tags
   }
