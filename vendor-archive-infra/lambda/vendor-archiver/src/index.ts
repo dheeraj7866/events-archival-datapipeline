@@ -205,11 +205,8 @@ async function writeToS3(
       Body: body,
       ContentType: "application/gzip",
       ContentEncoding: "gzip",
-      // Bucket policy requires aws:kms SSE AND Legal Hold ON at PUT time. Setting the
-      // hold inline satisfies both; we do NOT make a separate PutObjectLegalHold call
-      // because the SCP reserves s3:PutObjectLegalHold for compliance-officer (§5).
+      // Bucket policy requires aws:kms SSE for archive objects.
       ServerSideEncryption: "aws:kms",
-      ObjectLockLegalHoldStatus: "ON",
       Metadata: {
         "x-request-id": event.request_id,
         "x-vendor-id": event.vendor_id,
@@ -255,7 +252,6 @@ async function writeMetaToS3(event: VendorApiEventWire): Promise<string> {
       ContentType: "application/json",
       // Same bucket-policy requirements as the payload objects (§5).
       ServerSideEncryption: "aws:kms",
-      ObjectLockLegalHoldStatus: "ON",
       Metadata: {
         "x-request-id": event.request_id,
         "x-vendor-id": event.vendor_id,

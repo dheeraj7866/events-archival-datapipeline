@@ -12,7 +12,7 @@ set -uo pipefail
 
 ENV="${ENV:-staging}"
 case "$ENV" in
-  staging) REGION="${REGION:-ap-south-2}"; SUFFIX="aps2" ;;
+  staging) REGION="${REGION:-ap-south-1}"; SUFFIX="aps2" ;;
   prod)    REGION="${REGION:-ap-south-1}"; SUFFIX="aps1" ;;
   *) echo "FATAL: unknown ENV '$ENV' (use staging|prod)"; exit 1 ;;
 esac
@@ -74,6 +74,8 @@ HITS=$(aws s3 ls "s3://$BUCKET/" --recursive --region "$REGION" 2>/dev/null | gr
 
 bold "7) ClickHouse — run on the CH box via SSM (private, not reachable from here)"
 cat <<EOF
+   # This ClickHouse instance is private. Do NOT run this locally unless you have
+   # a tunnel or SSM session into the CH host.
    clickhouse-client --query "SELECT request_id, vendor_id, status, request_payload, ingested_at
      FROM vendor_archive.vendor_api_events WHERE request_id='$REQUEST_ID' FORMAT Vertical"
    (expect request_payload masked → ABC****34F, never the raw PAN)

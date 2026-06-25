@@ -140,7 +140,7 @@ data "aws_iam_policy_document" "archiver_writer" {
 # ──────────────────────────────────────────────────────────────────────────────
 # audit-reader  - used by compliance + engineering for read-only access
 # Can: S3 GetObject (audited via CloudTrail), KMS Decrypt, CH SELECT
-# Cannot: write, delete, modify Legal Hold
+# Cannot: write, delete, modify archive objects
 # ──────────────────────────────────────────────────────────────────────────────
 resource "aws_iam_role" "audit_reader" {
   count              = local.audit_reader_role_exists ? 1 : 0
@@ -180,7 +180,6 @@ data "aws_iam_policy_document" "audit_reader" {
     effect = "Allow"
     actions = [
       "s3:GetObject",
-      "s3:GetObjectLegalHold",
       "s3:ListBucket",
     ]
     resources = [

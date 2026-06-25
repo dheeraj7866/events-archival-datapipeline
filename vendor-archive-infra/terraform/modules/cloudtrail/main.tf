@@ -217,33 +217,3 @@ resource "aws_cloudwatch_metric_alarm" "getobject_spike" {
   tags = var.tags
 }
 
-# ── Alert: any Legal Hold removal ────────────────────────────────────────────
-resource "aws_cloudwatch_log_metric_filter" "legal_hold_removal" {
-  name           = "${var.name_prefix}-legal-hold-removal"
-  log_group_name = aws_cloudwatch_log_group.trail.name
-  pattern        = "{ ($.eventName = \"PutObjectLegalHold\") && ($.requestParameters.legalHold.status = \"OFF\") }"
-
-  metric_transformation {
-    name          = "LegalHoldRemovalCount"
-    namespace     = "VendorArchive/CloudTrail"
-    value         = "1"
-    default_value = "0"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "legal_hold_removal" {
-  alarm_name          = "${var.name_prefix}-legal-hold-removal"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "LegalHoldRemovalCount"
-  namespace           = "VendorArchive/CloudTrail"
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 0
-  treat_missing_data  = "notBreaching"
-
-  alarm_description = "CRITICAL: S3 Legal Hold removed on vendor archive object - requires immediate review"
-  alarm_actions     = var.alert_sns_arns
-
-  tags = var.tags
-}

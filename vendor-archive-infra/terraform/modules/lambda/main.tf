@@ -204,6 +204,16 @@ resource "aws_secretsmanager_secret" "clickhouse_password" {
   tags = var.tags
 }
 
+resource "random_password" "clickhouse_password" {
+  length  = 24
+  special = false
+}
+
+resource "aws_secretsmanager_secret_version" "clickhouse_password" {
+  secret_id     = aws_secretsmanager_secret.clickhouse_password.id
+  secret_string = random_password.clickhouse_password.result
+}
+
 # Grant Lambda execution role access to the secret
 resource "aws_secretsmanager_secret_policy" "clickhouse_password" {
   secret_arn = aws_secretsmanager_secret.clickhouse_password.arn

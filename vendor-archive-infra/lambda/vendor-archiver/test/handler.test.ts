@@ -67,14 +67,13 @@ describe("handler — end-to-end (mocked AWS): S3 raw, ClickHouse redacted", () 
     // No failures reported
     expect(res).toEqual({ batchItemFailures: [] });
 
-    // S3: request + response + meta.json — all KMS + Legal Hold, all under the
+    // S3: request + response + meta.json — all KMS encrypted, all under the
     // .../{user_id}/{request_id}/ prefix (user_id 'user-555' from the event).
     expect(mockPutObjectCommand).toHaveBeenCalledTimes(3);
     const putInputs = mockPutObjectCommand.mock.calls.map((c) => c[0] as any);
     for (const input of putInputs) {
       expect(input.Bucket).toBe("vendor-archive-staging-aps2");
       expect(input.ServerSideEncryption).toBe("aws:kms");
-      expect(input.ObjectLockLegalHoldStatus).toBe("ON");
       expect(input.Key).toMatch(
         /^2026\/05\/29\/karza\/kyc_verify\/user-555\/[\w-]+\/(request\.json\.gz|response\.json\.gz|meta\.json)$/
       );

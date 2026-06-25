@@ -5,13 +5,13 @@
 # Covers: multiple vendors, all 4 statuses, PII variety (redacted in CH / raw in S3),
 # a DUPLICATE request_id (ReplacingMergeTree dedup), and several user_id=dheeraj events.
 #
-# Usage: ./send-test-batch.sh                 # staging (ap-south-2)
+# Usage: ./send-test-batch.sh                 # staging (ap-south-1)
 #        ENV=prod ./send-test-batch.sh         # prod (ap-south-1)
 #        BULK=50 ENV=prod ./send-test-batch.sh # also fire BULK random extra messages
 set -uo pipefail
 ENV="${ENV:-staging}"
 case "$ENV" in
-  staging) REGION="${REGION:-ap-south-2}" ;;
+  staging) REGION="${REGION:-ap-south-1}" ;;
   prod)    REGION="${REGION:-ap-south-1}" ;;
   *) echo "FATAL: unknown ENV '$ENV' (use staging|prod)"; exit 1 ;;
 esac

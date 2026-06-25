@@ -18,6 +18,6 @@ variable "kms_key_arn" {
 }
 
 variable "archiver_writer_role_arn" {
-  description = "ARN of the archiver-writer role (PutObject + PutObjectLegalHold)"
+  description = "ARN of the archiver-writer role (PutObject only)"
   type        = string
 }
