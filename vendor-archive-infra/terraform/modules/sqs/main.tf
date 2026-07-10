@@ -10,7 +10,7 @@ resource "aws_sqs_queue" "dlq" {
   message_retention_seconds  = 1209600 # 14 days
   visibility_timeout_seconds = 300
 
-  kms_master_key_id                 = var.kms_key_arn
+  kms_master_key_id                 = var.kms_key_arn != "" ? var.kms_key_arn : null
   kms_data_key_reuse_period_seconds = 300
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-vendor-events-dlq" })
@@ -70,7 +70,7 @@ resource "aws_sqs_queue" "main" {
   # Long poll interval - reduces empty-receive cost
   receive_wait_time_seconds = 20
 
-  kms_master_key_id                 = var.kms_key_arn
+  kms_master_key_id                 = var.kms_key_arn != "" ? var.kms_key_arn : null
   kms_data_key_reuse_period_seconds = 300
 
   redrive_policy = jsonencode({
@@ -148,7 +148,7 @@ resource "aws_sqs_queue" "ch_retry" {
   receive_wait_time_seconds  = 20
   max_message_size           = 262144
 
-  kms_master_key_id                 = var.kms_key_arn
+  kms_master_key_id                 = var.kms_key_arn != "" ? var.kms_key_arn : null
   kms_data_key_reuse_period_seconds = 300
 
   tags = merge(var.tags, { Name = "${var.name_prefix}-ch-retry-q" })

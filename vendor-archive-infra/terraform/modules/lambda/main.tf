@@ -12,7 +12,7 @@ data "aws_caller_identity" "current" {}
 resource "aws_cloudwatch_log_group" "archiver" {
   name              = "/aws/lambda/${var.function_name}"
   retention_in_days = 30
-  kms_key_id        = var.kms_key_arn
+  kms_key_id        = var.kms_key_arn != "" ? var.kms_key_arn : null
 
   tags = var.tags
 }
@@ -197,9 +197,9 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
 resource "aws_secretsmanager_secret" "clickhouse_password" {
   name        = "${var.name_prefix}/clickhouse/archiver-password"
   description = "ClickHouse password for the vendor-archiver Lambda"
-  kms_key_id  = var.kms_key_arn
+  kms_key_id  = var.kms_key_arn != "" ? var.kms_key_arn : null
 
-  recovery_window_in_days = 30
+  recovery_window_in_days = 0
 
   tags = var.tags
 }
@@ -212,6 +212,15 @@ resource "random_password" "clickhouse_password" {
 resource "aws_secretsmanager_secret_version" "clickhouse_password" {
   secret_id     = aws_secretsmanager_secret.clickhouse_password.id
   secret_string = random_password.clickhouse_password.result
+}
+
+resource "terraform_data" "clickhouse_password_cleanup" {
+  input = aws_secretsmanager_secret.clickhouse_password.name
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws secretsmanager delete-secret --region ap-south-1 --secret-id ${self.input} --force-delete-without-recovery >/dev/null 2>&1 || true"
+  }
 }
 
 # Grant Lambda execution role access to the secret

@@ -71,20 +71,20 @@ data "aws_iam_policy_document" "archiver_writer" {
     resources = ["${var.s3_bucket_arn}/*"]
   }
 
-  # KMS - encrypt for S3 writes + Decrypt to RECEIVE from the SSE-KMS SQS queue.
-  # Decrypt does NOT expose the S3 archive: this role has no s3:GetObject, so it
-  # cannot read archive objects back regardless of KMS.
-  statement {
-    sid    = "KMSEncrypt"
-    effect = "Allow"
-    actions = [
-      "kms:Encrypt",
-      "kms:Decrypt",
-      "kms:GenerateDataKey",
-      "kms:GenerateDataKeyWithoutPlaintext",
-      "kms:DescribeKey",
-    ]
-    resources = [var.kms_key_arn]
+  dynamic "statement" {
+    for_each = var.kms_key_arn != "" ? [1] : []
+    content {
+      sid    = "KMSEncrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:DescribeKey",
+      ]
+      resources = [var.kms_key_arn]
+    }
   }
 
   # CloudWatch Logs - Lambda log delivery
@@ -188,14 +188,17 @@ data "aws_iam_policy_document" "audit_reader" {
     ]
   }
 
-  statement {
-    sid    = "KMSDecrypt"
-    effect = "Allow"
-    actions = [
-      "kms:Decrypt",
-      "kms:DescribeKey",
-    ]
-    resources = [var.kms_key_arn]
+  dynamic "statement" {
+    for_each = var.kms_key_arn != "" ? [1] : []
+    content {
+      sid    = "KMSDecrypt"
+      effect = "Allow"
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+      ]
+      resources = [var.kms_key_arn]
+    }
   }
 }
 
@@ -237,11 +240,14 @@ data "aws_iam_policy_document" "vendor_logger_svc" {
   }
 
   # SSE-KMS queue → producers need GenerateDataKey (+ Decrypt) on the CMK.
-  statement {
-    sid       = "KMSForSqsSend"
-    effect    = "Allow"
-    actions   = ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey"]
-    resources = [var.kms_key_arn]
+  dynamic "statement" {
+    for_each = var.kms_key_arn != "" ? [1] : []
+    content {
+      sid       = "KMSForSqsSend"
+      effect    = "Allow"
+      actions   = ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey"]
+      resources = [var.kms_key_arn]
+    }
   }
 
   # Hash salts loaded by the library at service startup.

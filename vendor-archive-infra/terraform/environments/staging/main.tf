@@ -41,9 +41,8 @@ locals {
 
 # ── Alerts SNS topic ──────────────────────────────────────────────────────────
 resource "aws_sns_topic" "alerts" {
-  name              = "${local.name_prefix}-alerts"
-  kms_master_key_id = module.kms.key_id
-  tags              = local.common_tags
+  name = "${local.name_prefix}-alerts"
+  tags = local.common_tags
 }
 
 resource "aws_sns_topic_subscription" "dheeraj_email" {
@@ -67,15 +66,6 @@ module "vpc" {
   flow_log_retention_days = var.flow_log_retention_days
 }
 
-# ── KMS ───────────────────────────────────────────────────────────────────────
-module "kms" {
-  source      = "../../modules/kms"
-  name_prefix = local.name_prefix
-  tags        = local.common_tags
-
-  archiver_writer_role_arn = module.iam.archiver_writer_role_arn
-}
-
 # ── IAM ───────────────────────────────────────────────────────────────────────
 module "iam" {
   source      = "../../modules/iam"
@@ -86,7 +76,7 @@ module "iam" {
   sqs_dlq_arn        = module.sqs.dlq_arn
   ch_retry_queue_arn = module.sqs.ch_retry_queue_arn
   s3_bucket_arn      = module.s3.bucket_arn
-  kms_key_arn        = module.kms.key_arn
+  kms_key_arn        = ""
   salt_secret_arns = [
     aws_secretsmanager_secret.mobile_hash_salt.arn,
     aws_secretsmanager_secret.aadhaar_hash_salt.arn,
@@ -106,8 +96,8 @@ resource "random_password" "aadhaar_hash_salt" {
 resource "aws_secretsmanager_secret" "mobile_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/mobile-hash-salt"
   description             = "HMAC salt for mobile hashing (vendor-logger)"
-  kms_key_id              = module.kms.key_arn
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0
+  kms_key_id              = null
   tags                    = local.common_tags
 }
 resource "aws_secretsmanager_secret_version" "mobile_hash_salt" {
@@ -115,16 +105,34 @@ resource "aws_secretsmanager_secret_version" "mobile_hash_salt" {
   secret_string = random_password.mobile_hash_salt.result
 }
 
+resource "terraform_data" "mobile_hash_salt_cleanup" {
+  input = aws_secretsmanager_secret.mobile_hash_salt.name
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws secretsmanager delete-secret --region ap-south-1 --secret-id ${self.input} --force-delete-without-recovery >/dev/null 2>&1 || true"
+  }
+}
+
 resource "aws_secretsmanager_secret" "aadhaar_hash_salt" {
   name                    = "${local.name_prefix}/vendor-logger/aadhaar-hash-salt"
   description             = "HMAC salt for Aadhaar last-4 hashing (vendor-logger)"
-  kms_key_id              = module.kms.key_arn
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0
+  kms_key_id              = null
   tags                    = local.common_tags
 }
 resource "aws_secretsmanager_secret_version" "aadhaar_hash_salt" {
   secret_id     = aws_secretsmanager_secret.aadhaar_hash_salt.id
   secret_string = random_password.aadhaar_hash_salt.result
+}
+
+resource "terraform_data" "aadhaar_hash_salt_cleanup" {
+  input = aws_secretsmanager_secret.aadhaar_hash_salt.name
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws secretsmanager delete-secret --region ap-south-1 --secret-id ${self.input} --force-delete-without-recovery >/dev/null 2>&1 || true"
+  }
 }
 
 # ── SQS ───────────────────────────────────────────────────────────────────────
@@ -133,7 +141,7 @@ module "sqs" {
   name_prefix = local.name_prefix
   tags        = local.common_tags
 
-  kms_key_arn              = module.kms.key_arn
+  kms_key_arn              = ""
   archiver_writer_role_arn = module.iam.archiver_writer_role_arn
   # producer role (vendor-logger-svc) + any externally-provided service roles
   service_role_arns = concat(var.service_role_arns, [module.iam.vendor_logger_svc_role_arn])
@@ -147,7 +155,7 @@ module "s3" {
   tags        = local.common_tags
 
   bucket_name              = var.s3_bucket_name
-  kms_key_arn              = module.kms.key_arn
+  kms_key_arn              = ""
   archiver_writer_role_arn = module.iam.archiver_writer_role_arn
 }
 
@@ -165,7 +173,7 @@ module "clickhouse" {
   data_volume_size_gb = var.clickhouse_data_volume_gb
   clickhouse_version  = var.clickhouse_version
 
-  kms_key_arn            = module.kms.key_arn
+  kms_key_arn            = ""
   allowed_ingress_sg_ids = [] # wired via aws_security_group_rule below to break cycle
   bastion_sg_ids         = var.bastion_sg_ids
   alert_sns_arns         = [aws_sns_topic.alerts.arn]
@@ -210,7 +218,7 @@ module "lambda" {
   sqs_queue_arn      = module.sqs.queue_arn
   dlq_arn            = module.sqs.dlq_arn
   ch_retry_queue_url = module.sqs.ch_retry_queue_url
-  kms_key_arn        = module.kms.key_arn
+  kms_key_arn        = ""
   s3_bucket_name     = module.s3.bucket_id
 
   clickhouse_host     = module.clickhouse.private_ip
@@ -282,4 +290,4 @@ output "aadhaar_hash_salt_secret_arn" { value = aws_secretsmanager_secret.aadhaa
 output "clickhouse_private_ip" { value = module.clickhouse.private_ip }
 output "clickhouse_sg_id" { value = module.clickhouse.security_group_id }
 # output "codeartifact_npm_endpoint" { value = module.codeartifact.npm_endpoint }
-output "kms_key_arn" { value = module.kms.key_arn }
+output "kms_key_arn" { value = "" }
