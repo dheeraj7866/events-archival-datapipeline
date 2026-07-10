@@ -1,0 +1,460 @@
+{
+  "title": "Vendor Archive - Ops, Data Quality, Compliance",
+  "uid": "vendor-archive-ops-compliance",
+  "description": "ClickHouse-backed operational, data quality, and compliance visibility for the vendor archive pipeline.",
+  "tags": [
+    "vendor",
+    "ops",
+    "compliance",
+    "data-quality",
+    "clickhouse"
+  ],
+  "timezone": "Asia/Kolkata",
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT environment FROM vendor_archive.vendor_api_events ORDER BY environment",
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%"
+      },
+      {
+        "name": "vendor",
+        "label": "Vendor",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT vendor_id FROM vendor_archive.vendor_api_events ORDER BY vendor_id",
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Events Ingested",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count() AS events FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "P95 Ingest Lag",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT quantile(0.95)(greatest(0, dateDiff('second', created_at, ingested_at))) AS p95_lag_seconds FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Duplicate Request IDs",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count() AS duplicate_request_ids FROM (SELECT request_id FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY request_id HAVING count() > 1)",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Payloads Truncated",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT countIf(payload_truncated = 1) AS truncated_payloads FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Rows Missing S3 Keys",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT countIf(s3_request_key = '' OR s3_response_key = '') AS rows_missing_s3_keys FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Possible PII In Hot Payload",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT countIf(match(request_payload, '[A-Z]{5}[0-9]{4}[A-Z]') OR match(response_payload, '[A-Z]{5}[0-9]{4}[A-Z]') OR match(request_payload, '[6-9][0-9]{9}') OR match(response_payload, '[6-9][0-9]{9}')) AS possible_pii_rows FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Archive Insert Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(ingested_at) AS time, environment, count() AS rows FROM vendor_archive.vendor_api_events WHERE $__timeFilter(ingested_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY time, environment ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Ingest Lag P95 By Minute",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, vendor_id, quantile(0.95)(greatest(0, dateDiff('second', created_at, ingested_at))) AS p95_lag_seconds FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY time, vendor_id ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Latency P95 By Vendor",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, vendor_id, quantile(0.95)(latency_ms) AS p95_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY time, vendor_id ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Error Mix By Status",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, status, count() AS calls FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY time, status ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Data Completeness By Vendor",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, count() AS rows, countIf(user_id = '') AS missing_user_id, countIf(loan_application_number IS NULL) AS missing_lan, countIf(request_hash = '') AS missing_request_hash, countIf(s3_request_key = '' OR s3_response_key = '') AS missing_s3_key, countIf(pan_masked = '') AS missing_pan_mask, countIf(mobile_hash = '') AS missing_mobile_hash, countIf(aadhaar_last4_hash = '') AS missing_aadhaar_hash FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY vendor_id ORDER BY rows DESC",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Slowest Vendor Endpoints",
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, count() AS calls, round(avg(latency_ms), 0) AS avg_ms, quantile(0.50)(latency_ms) AS p50_ms, quantile(0.95)(latency_ms) AS p95_ms, quantile(0.99)(latency_ms) AS p99_ms, max(latency_ms) AS max_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY vendor_id, endpoint HAVING calls >= 3 ORDER BY p95_ms DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Duplicate Deliveries",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT request_id, any(vendor_id) AS vendor_id, any(endpoint) AS endpoint, min(created_at) AS first_seen, max(ingested_at) AS last_ingested, count() AS copies FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' GROUP BY request_id HAVING copies > 1 ORDER BY copies DESC, last_ingested DESC LIMIT 100",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Compliance Redaction Watchlist",
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at, vendor_id, endpoint, request_id, pan_masked, mobile_last4, payload_truncated, length(request_payload) AS request_payload_bytes, length(response_payload) AS response_payload_bytes FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND environment LIKE '$environment' AND vendor_id LIKE '$vendor' AND (match(request_payload, '[A-Z]{5}[0-9]{4}[A-Z]') OR match(response_payload, '[A-Z]{5}[0-9]{4}[A-Z]') OR match(request_payload, '[6-9][0-9]{9}') OR match(response_payload, '[6-9][0-9]{9}') OR payload_truncated = 1) ORDER BY created_at DESC LIMIT 100",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

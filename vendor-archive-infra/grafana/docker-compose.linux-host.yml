@@ -1,0 +1,6 @@
+services:
+  grafana:
+    network_mode: host
+    ports: []
+    environment:
+      CLICKHOUSE_HOST: "${CLICKHOUSE_HOST:-127.0.0.1}"

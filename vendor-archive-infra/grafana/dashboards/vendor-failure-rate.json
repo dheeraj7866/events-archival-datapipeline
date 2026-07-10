@@ -1,53 +1,45 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_CLICKHOUSE",
-      "label": "ClickHouse",
-      "type": "datasource",
-      "pluginId": "grafana-clickhouse-datasource"
-    },
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "type": "datasource",
-      "pluginId": "prometheus"
-    }
-  ],
-  "title": "Vendor API — Failure Rate",
+  "title": "Vendor API - Failure Rate",
   "uid": "vendor-failure-rate",
-  "description": "Per-vendor failure rate across all services. P1 vendors in top row, P2 below.",
-  "tags": ["vendor", "failure", "compliance"],
+  "description": "ClickHouse-backed failure, timeout, and network-error monitoring by vendor, endpoint, service, and lifecycle stage.",
+  "tags": [
+    "vendor",
+    "failure",
+    "clickhouse"
+  ],
   "timezone": "Asia/Kolkata",
   "refresh": "1m",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "vendor",
         "label": "Vendor",
         "type": "query",
-        "datasource": "${DS_PROMETHEUS}",
-        "query": "label_values(vendor_api_calls_total, vendor_id)",
-        "multi": true,
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT vendor_id FROM vendor_archive.vendor_api_events ORDER BY vendor_id",
+        "multi": false,
         "includeAll": true,
-        "allValue": ".*"
+        "allValue": "%"
       },
       {
         "name": "service",
         "label": "Service",
         "type": "query",
-        "datasource": "${DS_PROMETHEUS}",
-        "query": "label_values(vendor_api_calls_total, service)",
-        "multi": true,
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT service FROM vendor_archive.vendor_api_events ORDER BY service",
+        "multi": false,
         "includeAll": true,
-        "allValue": ".*"
-      },
-      {
-        "name": "window",
-        "label": "Window",
-        "type": "interval",
-        "options": ["1m", "5m", "15m", "1h"],
-        "current": "5m"
+        "allValue": "%"
       }
     ]
   },
@@ -55,23 +47,41 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Overall failure rate (last 5m)",
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
-      "datasource": "${DS_PROMETHEUS}",
+      "title": "Failure Rate",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
       "targets": [
         {
-          "expr": "sum(rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) / sum(rate(vendor_api_calls_total{vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) * 100",
-          "legendFormat": "Failure %"
+          "rawSql": "SELECT if(count() = 0, 0, round(countIf(status IN ('FAILURE', 'TIMEOUT', 'NETWORK_ERROR')) * 100.0 / count(), 2)) AS failure_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service'",
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
+          "decimals": 2,
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
             ]
           }
         }
@@ -80,70 +90,176 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Total calls (last 5m)",
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
-      "datasource": "${DS_PROMETHEUS}",
+      "title": "Failed Calls",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
       "targets": [
         {
-          "expr": "sum(rate(vendor_api_calls_total{vendor_id=~\"$vendor\",service=~\"$service\"}[$window])) * 60 * 5",
-          "legendFormat": "Calls"
+          "rawSql": "SELECT countIf(status IN ('FAILURE', 'TIMEOUT', 'NETWORK_ERROR')) AS failed_calls FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service'",
+          "format": "table"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "short", "decimals": 0 }
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
       }
     },
     {
       "id": 3,
-      "type": "timeseries",
-      "title": "Failure rate by vendor (P1 only)",
-      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
-      "datasource": "${DS_PROMETHEUS}",
+      "type": "stat",
+      "title": "Timeout Rate",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
       "targets": [
         {
-          "expr": "sum by (vendor_id) (rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"easebuzz|synoriq|icici-bank|internal-bre\"}[$window])) / sum by (vendor_id) (rate(vendor_api_calls_total{vendor_id=~\"easebuzz|synoriq|icici-bank|internal-bre\"}[$window])) * 100",
-          "legendFormat": "{{vendor_id}}"
+          "rawSql": "SELECT if(count() = 0, 0, round(countIf(status = 'TIMEOUT') * 100.0 / count(), 2)) AS timeout_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service'",
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "custom": { "lineWidth": 2 },
-          "thresholds": {
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          }
+          "decimals": 2
         }
       }
     },
     {
       "id": 4,
-      "type": "timeseries",
-      "title": "Failure rate by vendor (P2)",
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
-      "datasource": "${DS_PROMETHEUS}",
+      "type": "stat",
+      "title": "Network Error Rate",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
       "targets": [
         {
-          "expr": "sum by (vendor_id) (rate(vendor_api_calls_total{status=~\"FAILURE|TIMEOUT|NETWORK_ERROR\",vendor_id=~\"digitap|signzy\"}[$window])) / sum by (vendor_id) (rate(vendor_api_calls_total{vendor_id=~\"digitap|signzy\"}[$window])) * 100",
-          "legendFormat": "{{vendor_id}}"
+          "rawSql": "SELECT if(count() = 0, 0, round(countIf(status = 'NETWORK_ERROR') * 100.0 / count(), 2)) AS network_error_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service'",
+          "format": "table"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "percent" }
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        }
       }
     },
     {
       "id": 5,
-      "type": "table",
-      "title": "Failure breakdown by vendor + endpoint (ClickHouse — last 1h)",
-      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 10 },
-      "datasource": "${DS_CLICKHOUSE}",
+      "type": "timeseries",
+      "title": "Failure Rate By Vendor",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
       "targets": [
         {
-          "rawSql": "SELECT vendor_id, endpoint, status, count() AS calls, round(avg(latency_ms)) AS avg_latency_ms FROM vendor_archive.vendor_api_events WHERE created_at >= now() - INTERVAL 1 HOUR AND vendor_id IN ('easebuzz','synoriq','icici-bank','internal-bre','digitap','signzy') GROUP BY vendor_id, endpoint, status ORDER BY calls DESC LIMIT 100",
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, vendor_id, if(count() = 0, 0, countIf(status IN ('FAILURE', 'TIMEOUT', 'NETWORK_ERROR')) * 100.0 / count()) AS failure_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' GROUP BY time, vendor_id ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Failures By Status",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, status, count() AS calls FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' GROUP BY time, status ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Failure Breakdown By Vendor And Endpoint",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, status, http_status, error_code, count() AS calls, uniqExact(user_id) AS impacted_users, round(avg(latency_ms), 0) AS avg_latency_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' GROUP BY vendor_id, endpoint, status, http_status, error_code ORDER BY calls DESC LIMIT 100",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Recent Failed Calls",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at, service, vendor_id, endpoint, status, http_status, latency_ms, error_code, error_message, user_id, loan_application_number, request_id FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' ORDER BY created_at DESC LIMIT 100",
           "format": "table"
         }
       ]

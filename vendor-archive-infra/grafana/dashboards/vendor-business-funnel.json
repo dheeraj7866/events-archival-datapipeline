@@ -1,0 +1,399 @@
+{
+  "title": "Vendor Archive - Business Funnel",
+  "uid": "vendor-business-funnel",
+  "description": "Business-facing vendor API metrics from ClickHouse: volume, success rate, user/loan impact, lifecycle funnel, and vendor reliability.",
+  "tags": [
+    "vendor",
+    "business",
+    "funnel",
+    "clickhouse"
+  ],
+  "timezone": "Asia/Kolkata",
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "vendor",
+        "label": "Vendor",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT vendor_id FROM vendor_archive.vendor_api_events ORDER BY vendor_id",
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%"
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT service FROM vendor_archive.vendor_api_events ORDER BY service",
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%"
+      },
+      {
+        "name": "stage",
+        "label": "Lifecycle Stage",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "vendor-archive-clickhouse"
+        },
+        "query": "SELECT DISTINCT toString(loan_lifecycle_stage) FROM vendor_archive.vendor_api_events ORDER BY toString(loan_lifecycle_stage)",
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Vendor Calls",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT count() AS calls FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Success Rate",
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT if(count() = 0, 0, round(countIf(status = 'SUCCESS') * 100.0 / count(), 2)) AS success_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 97
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Impacted Users",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT uniqExact(user_id) AS users FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND user_id != '' AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Impacted Loan Applications",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT uniqExact(loan_application_number) AS loan_apps FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND loan_application_number IS NOT NULL AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Timeout + Network Errors",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT countIf(status IN ('TIMEOUT', 'NETWORK_ERROR')) AS transport_errors FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "P95 Vendor Latency",
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT quantile(0.95)(latency_ms) AS p95_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Call Volume By Vendor",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, vendor_id, count() AS calls FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' GROUP BY time, vendor_id ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Success Rate By Vendor",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toStartOfMinute(created_at) AS time, vendor_id, if(count() = 0, 0, countIf(status = 'SUCCESS') * 100.0 / count()) AS success_rate FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' GROUP BY time, vendor_id ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Lifecycle Funnel Health",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT toString(loan_lifecycle_stage) AS stage, count() AS calls, uniqExact(user_id) AS users, uniqExact(loan_application_number) AS loan_apps, countIf(status = 'SUCCESS') AS successes, countIf(status != 'SUCCESS') AS failures, round(countIf(status = 'SUCCESS') * 100.0 / count(), 2) AS success_rate, round(quantile(0.95)(latency_ms), 0) AS p95_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' GROUP BY stage ORDER BY calls DESC",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Vendor Reliability Ranking",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, count() AS calls, countIf(status = 'SUCCESS') AS successes, countIf(status != 'SUCCESS') AS failures, round(countIf(status = 'SUCCESS') * 100.0 / count(), 2) AS success_rate, round(quantile(0.95)(latency_ms), 0) AS p95_ms, round(avg(latency_ms), 0) AS avg_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' GROUP BY vendor_id ORDER BY failures DESC, p95_ms DESC",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Top Failing Endpoints",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT vendor_id, endpoint, status, count() AS failures, uniqExact(user_id) AS impacted_users, round(avg(latency_ms), 0) AS avg_ms FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' GROUP BY vendor_id, endpoint, status ORDER BY failures DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Recent Failed Business Events",
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "vendor-archive-clickhouse"
+      },
+      "targets": [
+        {
+          "rawSql": "SELECT created_at, service, vendor_id, endpoint, toString(loan_lifecycle_stage) AS stage, loan_application_number, user_id, status, http_status, latency_ms, error_code, error_message, request_id FROM vendor_archive.vendor_api_events WHERE $__timeFilter(created_at) AND status != 'SUCCESS' AND vendor_id LIKE '$vendor' AND service LIKE '$service' AND toString(loan_lifecycle_stage) LIKE '$stage' ORDER BY created_at DESC LIMIT 100",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: vendor-archive-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_INSTALL_PLUGINS: "grafana-clickhouse-datasource"
+      CLICKHOUSE_HOST: "${CLICKHOUSE_HOST:-127.0.0.1}"
+      CLICKHOUSE_PORT: "${CLICKHOUSE_PORT:-8123}"
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:-grafana_reader}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-}"
+      CLICKHOUSE_DATABASE: "${CLICKHOUSE_DATABASE:-vendor_archive}"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards/vendor-archive:ro
+
+volumes:
+  grafana-data:

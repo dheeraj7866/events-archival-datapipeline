@@ -100,13 +100,13 @@ groups:
                 vendor_id=~"easebuzz|synoriq|icici-bank|internal-bre"
               }[5m])
             )
-          ) > 5
+          ) > 5000
         for: 3m
         labels:
           severity: warning
           tier: P1
         annotations:
-          summary: "P1 vendor {{ $labels.vendor_id }} p95 latency {{ $value | humanizeDuration }}"
+          summary: "P1 vendor {{ $labels.vendor_id }} p95 latency {{ $value | humanize }}ms"
           description: >
             {{ $labels.vendor_id }} p95 latency has exceeded 5s. NFR6 target is p95 < 5s.
 
